@@ -708,7 +708,8 @@ class _LoginInsightRow extends StatelessWidget {
     final statusColor = _statusColor(insight.status);
     
     final workType = insight.workType?.toLowerCase();
-    final isRemote = workType == 'remote' || workType == 'hybrid';
+    final isRemote = workType == 'remote';
+    final isHybrid = workType == 'hybrid';
     final isInOffice = workType == 'in office';
 
     String _formatTime(DateTime? t) {
@@ -763,31 +764,48 @@ class _LoginInsightRow extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.purple.shade50,
+                      color: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       'Remote',
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.purple.shade700,
+                        color: isDark ? Colors.purple.shade300 : Colors.purple.shade700,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-                if (isInOffice) ...[
-                  if (isRemote) const SizedBox(width: 8),
+                if (isHybrid) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: isDark ? Colors.indigo.shade900.withOpacity(0.3) : Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Hybrid',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: isDark ? Colors.indigo.shade300 : Colors.indigo.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+                if (isInOffice) ...[
+                  if (isRemote || isHybrid) const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       'In Office',
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.green.shade700,
+                        color: isDark ? Colors.green.shade300 : Colors.green.shade700,
                         fontWeight: FontWeight.bold,
                       ),
                     ),

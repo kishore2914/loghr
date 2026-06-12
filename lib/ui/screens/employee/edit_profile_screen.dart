@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:loghr_mobile/logic/auth_provider.dart';
 import 'package:loghr_mobile/logic/profile_provider.dart';
 import 'package:loghr_mobile/data/services/profile_service.dart';
+import 'package:flutter/services.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -230,7 +231,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
         _fatherNameController.text = profileData['father_name'] as String? ?? '';
         _motherNameController.text = profileData['mother_name'] as String? ?? '';
         _spouseNameController.text = profileData['spouse_name'] as String? ?? '';
-        _numberOfChildrenController.text = profileData['number_of_children'] != null ? '${profileData['number_of_children']}' : '';
+        
+        final childrenCount = profileData['number_of_children'] as int?;
+        _numberOfChildrenController.text = childrenCount != null 
+            ? (childrenCount < 0 ? '0' : '$childrenCount') 
+            : '';
         
         // Personal Tab - Address Information
         _currentAddressController.text = profileData['current_address'] as String? ?? '';
@@ -248,11 +253,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
         // Personal Tab - Personal Interests
         _hobbiesController.text = profileData['hobbies'] as String? ?? profileData['interests'] as String? ?? '';
         
-        // Professional Tab - Education
-        _highestQualificationController.text = profileData['highest_qualification'] as String? ?? '';
-        _universityController.text = profileData['university'] as String? ?? '';
-        _yearOfCompletionController.text = profileData['year_of_completion'] != null ? '${profileData['year_of_completion']}' : '';
-        _specializationController.text = profileData['specialization'] as String? ?? '';
+        // Professional Tab - Education with synonyms and fallbacks
+        final qualification = profileData['highest_qualification'] as String? ?? 
+                             profileData['qualification'] as String? ?? 
+                             profileData['education'] as String? ?? '';
+        _highestQualificationController.text = qualification.trim().isNotEmpty ? qualification : '';
+        
+        final university = profileData['university'] as String? ?? 
+                          profileData['institution'] as String? ?? 
+                          profileData['college'] as String? ?? 
+                          profileData['school'] as String? ?? '';
+        _universityController.text = university.trim().isNotEmpty ? university : '';
+        
+        _yearOfCompletionController.text = (profileData['year_of_completion'] ?? profileData['completion_year'] ?? profileData['pass_out_year']) != null 
+            ? '${profileData['year_of_completion'] ?? profileData['completion_year'] ?? profileData['pass_out_year']}' 
+            : '';
+            
+        final spec = profileData['specialization'] as String? ?? 
+                    profileData['field'] as String? ?? 
+                    profileData['stream'] as String? ?? '';
+        _specializationController.text = spec.trim().isNotEmpty ? spec : '';
 
         // Professional Tab - Previous Employment
         _previousEmployerController.text = profileData['previous_employer'] as String? ?? '';
@@ -291,9 +311,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
         
         // Documents Tab - Bank Details
         _bankNameController.text = profileData['bank_name'] as String? ?? '';
-        _accountNumberController.text = profileData['account_number'] as String? ?? '';
-        _ifscCodeController.text = profileData['ifsc_code'] as String? ?? '';
-        _bankBranchController.text = profileData['bank_branch'] as String? ?? '';
+        
+        final accNo = profileData['account_number'] as String? ?? 
+                      profileData['account_no'] as String? ?? 
+                      profileData['bank_account_no'] as String? ?? 
+                      profileData['bank_acc_no'] as String? ?? 
+                      profileData['bank_account_number'] as String? ?? '';
+        _accountNumberController.text = accNo.trim().isNotEmpty ? accNo : '';
+        _ifscCodeController.text = profileData['ifsc_code'] as String? ?? 
+                                   profileData['ifsc'] as String? ?? '';
+        _bankBranchController.text = profileData['bank_branch'] as String? ?? 
+                                     profileData['branch_name'] as String? ?? 
+                                     profileData['branch'] as String? ?? '';
         
         // Documents Tab - Passport Details
         _passportNumberController.text = profileData['passport_number'] as String? ?? '';
@@ -354,7 +383,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
         'father_name': _fatherNameController.text.trim().isEmpty ? null : _fatherNameController.text.trim(),
         'mother_name': _motherNameController.text.trim().isEmpty ? null : _motherNameController.text.trim(),
         'spouse_name': _spouseNameController.text.trim().isEmpty ? null : _spouseNameController.text.trim(),
-        'number_of_children': _numberOfChildrenController.text.trim().isEmpty ? null : int.tryParse(_numberOfChildrenController.text.trim()),
+        'number_of_children': _numberOfChildrenController.text.trim().isEmpty 
+            ? null 
+            : (int.tryParse(_numberOfChildrenController.text.trim()) != null 
+                ? (int.parse(_numberOfChildrenController.text.trim()) < 0 ? 0 : int.parse(_numberOfChildrenController.text.trim()))
+                : null),
         'current_address': _currentAddressController.text.trim().isEmpty ? null : _currentAddressController.text.trim(),
         'city': _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
         'state': _stateController.text.trim().isEmpty ? null : _stateController.text.trim(),
@@ -679,7 +712,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
               _buildTextField('Father\'s Name', _fatherNameController),
               _buildTextField('Mother\'s Name', _motherNameController),
               _buildTextField('Spouse\'s Name', _spouseNameController),
-              _buildTextField('Number of Children', _numberOfChildrenController, keyboardType: TextInputType.number),
+              _buildTextField(
+                'Number of Children', 
+                _numberOfChildrenController, 
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
             ],
             cardColor: cardColor,
             borderColor: borderColor,
@@ -966,6 +1004,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
     String? hintText,
     bool readOnly = false,
     VoidCallback? onTap,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
@@ -988,6 +1027,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> with SingleTicker
             onTap: onTap,
             keyboardType: keyboardType,
             maxLines: maxLines,
+            inputFormatters: inputFormatters,
           style: TextStyle(color: textColor),
           decoration: InputDecoration(
               hintText: hintText,

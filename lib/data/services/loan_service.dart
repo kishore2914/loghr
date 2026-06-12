@@ -3,116 +3,142 @@ import 'package:loghr_mobile/data/models/loan.dart';
 
 class LoanService {
   // Get employee eligibility info
-  Future<Map<String, dynamic>> getEmployeeEligibility(String userId) async {
+  Future<Map<String, dynamic>> getEmployeeEligibility(String userId, {Map<String, dynamic>? userProfile}) async {
     try {
       print('LoanService: Checking eligibility for user $userId');
       
-      // Get employee profile with date of joining and status
-      // We need to check both user_profiles and employees table for truth
-      final profile = await supabase
-          .from('user_profiles')
-          .select('''
-            status, 
-            employee_id, 
-            organization_id
-          ''')
-          .eq('user_id', userId)
-          .maybeSingle();
+      String? dojStr;
+      String? status;
+      String? employeeId;
+      Map<String, dynamic>? employeeData;
 
-      if (profile == null) {
-        return {
-          'isEligible': false,
-          'reason': 'Employee profile not found',
-          'monthsWorked': 0,
-          'status': null,
-        };
-      }
-
-      String? dojStr; // Was profile['date_of_joining'], but that column doesn't exist in user_profiles
-      String? status = profile['status'] as String? ?? 'active';
-      String employeeId = profile['employee_id'] as String? ?? userId;
-
-      // 1. FIRST PRIORITY: Try to find employee by user_id in employees table
-      // This is the most reliable method as used in ProfileService
-      try {
-        final empDataByUserId = await supabase
-            .from('employees')
-            .select('id, date_of_joining, joining_date, doj, start_date, status')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-        if (empDataByUserId != null) {
-          print('LoanService: Found employee record by user_id: $userId');
-
-           // Capture the real UUID from the employees table
-           // This is crucial for the foreign key in india_employee_loans
-           if (empDataByUserId['id'] != null) {
-              employeeId = empDataByUserId['id'] as String;
-              print('LoanService: Updated employeeId to UUID: $employeeId');
-           }
-
-           // Check multiple possible column names for Date of Joining
-           final possibleDoj = empDataByUserId['date_of_joining'] as String? ?? 
-                               empDataByUserId['joining_date'] as String? ??
-                               empDataByUserId['doj'] as String? ??
-                               empDataByUserId['start_date'] as String?;
-                               
-           if (possibleDoj != null) {
-             dojStr = possibleDoj;
-             print('LoanService: Using DOJ from employees table (via user_id): $dojStr');
-           }
-           
-           if (empDataByUserId['status'] != null) {
-             status = empDataByUserId['status'] as String?;
-             print('LoanService: Using status from employees table (via user_id): $status');
+      // 0. Use provided userProfile if available (Best Source of Truth)
+      if (userProfile != null) {
+        print('LoanService: Using provided userProfile data');
+        
+        if (userProfile['date_of_joining'] != null) {
+          dojStr = userProfile['date_of_joining'] as String;
+          print('LoanService: Using DOJ from ProfileProvider: $dojStr');
+        }
+        
+        if (userProfile['status'] != null) {
+          status = userProfile['status'] as String;
+          print('LoanService: Using status from ProfileProvider: $status');
+        }
+        
+        // Try to get employee ID from profile
+        if (userProfile['employee_id'] != null) {
+           // If it looks like a valid ID (not N/A), use it
+           final pEmpId = userProfile['employee_id'] as String;
+           if (pEmpId.isNotEmpty && pEmpId != 'N/A') {
+             employeeId = pEmpId;
            }
         }
-      } catch (e) {
-        print('LoanService: Failed to fetch by user_id: $e');
       }
 
-      // 2. SECOND PRIORITY: Try specific employee_id lookup if not found yet or if DOJ still null
-      if (dojStr == null && employeeId != userId) {
-         try {
-           // Try to find by ID first, then employee_code (robust lookup)
-           final empData = await supabase
-               .from('employees')
-               .select('date_of_joining, joining_date, doj, start_date, status')
-               .or('id.eq.$employeeId,employee_code.eq.$employeeId')
-               .limit(1)
-               .maybeSingle();
-               
-           if (empData != null) {
-             print('LoanService: Found employee record for $employeeId');
-             
-             // Check multiple possible column names for Date of Joining
-             final possibleDoj = empData['date_of_joining'] as String? ?? 
-                                 empData['joining_date'] as String? ??
-                                 empData['doj'] as String? ??
-                                 empData['start_date'] as String?;
-                                 
-             if (possibleDoj != null) {
-               dojStr = possibleDoj;
-               print('LoanService: Using DOJ from employees table: $dojStr');
-             }
-             
-             if (empData['status'] != null) {
-               status = empData['status'] as String?;
-               print('LoanService: Using status from employees table: $status');
-             }
-           }
-         } catch (e) {
-           print('LoanService: Error fetching detailed employee data: $e');
+      // If we have what we need from ProfileProvider, skip the robust lookup or use it as fallback
+      if (dojStr != null && status != null) {
+         // We still might want to get the actual employee record to ensure we have the UUID for foreign keys
+         // if the profile provider only had the display code
+         if (employeeId == null || employeeId == userId) {
+            // Do a quick lookup just for ID
+             try {
+              final emp = await supabase
+                  .from('employees')
+                  .select('id')
+                  .eq('user_id', userId)
+                  .maybeSingle();
+              if (emp != null) {
+                employeeId = emp['id'] as String;
+              }
+            } catch (e) {}
          }
+      } else {
+        // Fallback to internal robust lookup if profile didn't have data
+        try {
+          employeeData = await supabase
+              .from('employees')
+              .select()
+              .eq('user_id', userId)
+              .maybeSingle();
+              
+          if (employeeData != null) {
+            print('LoanService: Found employee by user_id');
+          }
+        } catch (e) {
+          print('LoanService: Failed to fetch by user_id: $e');
+        }
+        
+        // 2b. If not found, try by employee_id/employee_code
+        if (employeeData == null && (employeeId?.isNotEmpty ?? false)) {
+          try {
+             employeeData = await supabase
+                 .from('employees')
+                 .select()
+                 .or('id.eq.$employeeId,employee_code.eq.$employeeId')
+                 .limit(1)
+                 .maybeSingle();
+                 
+             if (employeeData != null) {
+               print('LoanService: Found employee by ID/Code: $employeeId');
+             }
+          } catch (e) {
+            print('LoanService: Failed to fetch by ID/Code: $e');
+          }
+        }
+        
+        // 3. Extract Data (Prioritizing employees table)
+        if (employeeData != null) {
+          // Update employeeId to the UUID from employees table (crucial for foreign keys)
+          if (employeeData['id'] != null) {
+            employeeId = employeeData['id'] as String;
+          }
+          
+          // Status
+          if (employeeData['status'] != null) {
+            status = employeeData['status'] as String?;
+          }
+          
+          // 4. Resolve Date of Joining (Check all possible columns)
+          dojStr = employeeData['date_of_joining'] as String? ?? 
+                   employeeData['joining_date'] as String? ??
+                   employeeData['doj'] as String? ??
+                   employeeData['start_date'] as String?;
+        }
+        
+        // 5. Fallback: If still no DOJ, try views (last resort, similar to ProfileService)
+        if (dojStr == null) {
+          final viewPatterns = ['employees_with_details', 'employee_details', 'v_employees'];
+          for (final pattern in viewPatterns) {
+            try {
+              final viewData = await supabase
+                  .from(pattern)
+                  .select()
+                  .eq('user_id', userId)
+                  .maybeSingle();
+                  
+              if (viewData != null) {
+                dojStr = viewData['date_of_joining'] as String? ?? 
+                         viewData['joining_date'] as String? ??
+                         viewData['doj'] as String?;
+                
+                if (viewData['status'] != null) {
+                  status = viewData['status'] as String?;
+                }
+                if (dojStr != null) break;
+              }
+            } catch (e) { continue; }
+          }
+        }
       }
-
 
       if (dojStr == null) {
         return {
           'isEligible': false,
           'reason': 'Date of joining not set',
           'monthsWorked': 0,
-          'status': status,
+          'status': status?.toUpperCase() ?? 'UNKNOWN',
+          'dateOfJoining': null,
         };
       }
 
@@ -121,20 +147,19 @@ class LoanService {
       
       // Calculate total months difference
       final monthsWorked = (now.year - doj.year) * 12 + (now.month - doj.month) + 
-          (now.day >= doj.day ? 0 : -1); // Subtract 1 if current day < joining day
+          (now.day >= doj.day ? 0 : -1);
       
       print('LoanService: Calculated months worked: $monthsWorked (DOJ: $dojStr)');
       
-      // Check if status is probation or active (or other valid statuses)
+      // Check if status is probation or active
       final validStatuses = ['active', 'probation', 'confirmed', 'permanent', 'regular'];
-      final statusLower = status?.toLowerCase() ?? '';
-      
+      final statusLower = status?.toLowerCase().trim() ?? 'active';
       final isStatusValid = validStatuses.contains(statusLower);
 
-      // Eligible if 6+ months worked AND status is valid
+      // Eligible ONLY if 6+ months worked AND status is valid
       final isEligible = monthsWorked >= 6 && isStatusValid;
 
-      // Get gross salary for loan amount calculation
+      // Get gross salary
       double? grossSalary;
       try {
         final payroll = await supabase
@@ -147,8 +172,6 @@ class LoanService {
         
         grossSalary = (payroll?['gross_salary'] as num?)?.toDouble();
       } catch (e) {
-        // Fallback for gross salary if payroll config missing
-        // Could fetch from employees table if it had salary info
         print('Error fetching gross salary: $e');
       }
 
@@ -157,12 +180,12 @@ class LoanService {
         'reason': isEligible 
             ? null 
             : monthsWorked < 6 
-                ? 'Must complete 6 months of service'
+                ? 'Must complete 6 months. Completed: $monthsWorked months.'
                 : !isStatusValid
-                    ? 'Employee status must be probation or active'
+                    ? 'Status must be active/probation. Current: $statusLower'
                     : 'Not eligible',
         'monthsWorked': monthsWorked < 0 ? 0 : monthsWorked,
-        'status': status,
+        'status': statusLower.toUpperCase(),
         'dateOfJoining': dojStr,
         'grossSalary': grossSalary,
         'employeeId': employeeId,
@@ -272,7 +295,7 @@ class LoanService {
   // Get all pending loans (for admin)
   Future<List<LoanApplication>> getPendingLoans(String organizationId) async {
     try {
-      // Get all user profiles in the organization first
+      // Get all user profiles in the organization first (Optimization: just get user_ids)
       final profiles = await supabase
           .from('user_profiles')
           .select('user_id')
@@ -286,22 +309,73 @@ class LoanService {
       if (userIds.isEmpty) return [];
 
       // Get pending loans for these users
-      // We need to join with employees table to get names, as user_profiles might not be directly linked in this table
+      // Fetch loans first without join to avoid error
       final data = await supabase
           .from('india_employee_loans')
-          .select('''
-            *,
-            employees!india_employee_loans_employee_id_fkey(full_name, employee_code, user_id)
-          ''')
+          .select('*')
           .eq('status', 'pending')
-          .eq('organization_id', organizationId) // Filter by org directly
+          .eq('organization_id', organizationId)
           .order('created_at', ascending: false);
 
-      final loans = (data as List)
-          .map((json) => LoanApplication.fromJson(json))
-          .toList();
+      final loansList = List<Map<String, dynamic>>.from(data as List);
+      
+      if (loansList.isEmpty) return [];
 
-      return loans;
+      // Manual Fetch for Names
+      try {
+        // 1. Get Employee IDs from loans
+        final employeeIds = loansList
+            .map((l) => l['employee_id'] as String?)
+            .whereType<String>()
+            .toSet()
+            .toList();
+            
+        // 2. Fetch Employees to get User IDs (if needed, or if we can link directly)
+        // Since we filtered profiles by org initially, let's fetch profiles for these specific loans to get names
+        // But first we need user_id corresponding to employee_id
+        final employees = await supabase
+            .from('employees')
+            .select('id, user_id')
+            .inFilter('id', employeeIds);
+            
+        final empUserMap = {
+          for (var e in employees) e['id'] as String: e['user_id'] as String?
+        };
+        
+        // 3. Get User IDs
+        final loanUserIds = empUserMap.values.whereType<String>().toSet().toList();
+        
+        // 4. Fetch Names from User Profiles
+        final userProfiles = await supabase
+            .from('user_profiles')
+            .select('user_id, full_name')
+            .inFilter('user_id', loanUserIds);
+            
+        final nameMap = {
+          for (var u in userProfiles) u['user_id'] as String: u['full_name'] as String?
+        };
+        
+        // 5. Merge Names into Loan Data
+        final loans = loansList.map((json) {
+          final empId = json['employee_id'] as String?;
+          final userId = empUserMap[empId];
+          final name = nameMap[userId] ?? 'Unknown Employee';
+          
+          // Inject name into json for fromJson or use constructor
+          // We updated fromJson to look for 'employee_name', so let's add it
+          return LoanApplication.fromJson({
+            ...json,
+            'employee_name': name,
+          });
+        }).toList();
+        
+        return loans;
+        
+      } catch (e) {
+        print('Error fetching details for pending loans: $e');
+        // Return basic loans if details fetch fails
+        return loansList.map((json) => LoanApplication.fromJson(json)).toList();
+      }
     } catch (e) {
       print('Error fetching pending loans: $e');
       return [];

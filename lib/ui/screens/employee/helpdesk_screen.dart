@@ -234,7 +234,7 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
                   _buildCategoryChip('Technical/IT Support', Icons.computer, isDark),
                   _buildCategoryChip('HR Related', Icons.people, isDark),
                   _buildCategoryChip('Admin/Facility', Icons.business, isDark),
-                  _buildCategoryChip('Payroll Issue', Icons.account_balance_wallet, isDark),
+                  // _buildCategoryChip('Payroll Issue', Icons.account_balance_wallet, isDark), // Removed
                   _buildCategoryChip('Other', Icons.help_outline, isDark),
                 ],
               ),
@@ -497,7 +497,7 @@ class _HelpdeskScreenState extends State<HelpdeskScreen> {
                 itemBuilder: (context, index) {
                   final ticket = _filteredTickets[index];
                   return Card(
-                    elevation: 0,
+                    elevation: 2,
                     color: cardColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

@@ -27,6 +27,7 @@ class AttendanceRepository {
     required double longitude,
     required String address,
     String? earlyCheckoutReason,
+    bool isAutoCheckout = false,
   }) async {
     return await _service.checkOut(
       userId: userId,
@@ -35,6 +36,7 @@ class AttendanceRepository {
       longitude: longitude,
       address: address,
       earlyCheckoutReason: earlyCheckoutReason,
+      isAutoCheckout: isAutoCheckout,
     );
   }
 

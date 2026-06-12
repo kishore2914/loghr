@@ -167,7 +167,7 @@ class LoyaltyCardWidget extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'MEMBER NAME',
+                                'EMPLOYEE NAME',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 9,
@@ -185,15 +185,15 @@ class LoyaltyCardWidget extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            Text(
-                              card.role,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 10,
-                                fontWeight: FontWeight.normal,
+                              Text(
+                                card.designation,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
                           ],
                         ),
                       ),

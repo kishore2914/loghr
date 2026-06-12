@@ -7,9 +7,11 @@ import 'package:loghr_mobile/logic/leave_provider.dart';
 import 'package:loghr_mobile/logic/profile_provider.dart';
 import 'package:loghr_mobile/data/services/payroll_service.dart';
 import 'package:loghr_mobile/data/services/profile_service.dart';
-import 'package:loghr_mobile/ui/screens/employee/settings_screen.dart';
+import 'package:loghr_mobile/ui/screens/shared/settings_screen.dart';
 import 'package:loghr_mobile/ui/screens/employee/payslip_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
@@ -102,6 +104,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   final TextEditingController _bankBranchController = TextEditingController();
   final TextEditingController _passportNumberController = TextEditingController();
   final TextEditingController _passportIssueDateController = TextEditingController();
+
+  // Payroll filter state
+  int? _selectedMonth;
+  int? _selectedYear;
 
   @override
   void initState() {
@@ -255,8 +261,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _fatherNameController.text = profileData['father_name'] as String? ?? '';
     _motherNameController.text = profileData['mother_name'] as String? ?? '';
     _spouseNameController.text = profileData['spouse_name'] as String? ?? '';
-    _numberOfChildrenController.text = profileData['number_of_children'] != null 
-        ? '${profileData['number_of_children']}' 
+    
+    final childrenCount = profileData['number_of_children'] as int?;
+    _numberOfChildrenController.text = childrenCount != null 
+        ? (childrenCount < 0 ? '0' : '$childrenCount') 
         : '';
     
     // Load address information
@@ -277,11 +285,26 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                              profileData['interests'] as String? ?? 
                              profileData['personal_interests'] as String? ?? '';
     
-    // Load Education
-    _highestQualificationController.text = profileData['highest_qualification'] as String? ?? '';
-    _universityController.text = profileData['university'] as String? ?? '';
-    _yearOfCompletionController.text = profileData['year_of_completion'] != null ? '${profileData['year_of_completion']}' : '';
-    _specializationController.text = profileData['specialization'] as String? ?? '';
+    // Load Education with synonyms and fallbacks
+    final qualification = profileData['highest_qualification'] as String? ?? 
+                         profileData['qualification'] as String? ?? 
+                         profileData['education'] as String? ?? '';
+    _highestQualificationController.text = qualification.trim().isNotEmpty ? qualification : '';
+    
+    final university = profileData['university'] as String? ?? 
+                      profileData['institution'] as String? ?? 
+                      profileData['college'] as String? ?? 
+                      profileData['school'] as String? ?? '';
+    _universityController.text = university.trim().isNotEmpty ? university : '';
+    
+    _yearOfCompletionController.text = (profileData['year_of_completion'] ?? profileData['completion_year'] ?? profileData['pass_out_year']) != null 
+        ? '${profileData['year_of_completion'] ?? profileData['completion_year'] ?? profileData['pass_out_year']}' 
+        : '';
+        
+    final spec = profileData['specialization'] as String? ?? 
+                profileData['field'] as String? ?? 
+                profileData['stream'] as String? ?? '';
+    _specializationController.text = spec.trim().isNotEmpty ? spec : '';
 
     // Load Previous Employment
     _previousEmployerController.text = profileData['previous_employer'] as String? ?? '';
@@ -332,9 +355,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     
     // Load bank details
     _bankNameController.text = profileData['bank_name'] as String? ?? '';
-    _accountNumberController.text = profileData['account_number'] as String? ?? '';
-    _ifscCodeController.text = profileData['ifsc_code'] as String? ?? '';
-    _bankBranchController.text = profileData['bank_branch'] as String? ?? '';
+    // Load account number with fallbacks
+    final accNo = profileData['account_number'] as String? ?? 
+                  profileData['account_no'] as String? ?? 
+                  profileData['bank_account_no'] as String? ?? 
+                  profileData['bank_acc_no'] as String? ?? 
+                  profileData['bank_account_number'] as String? ?? '';
+    _accountNumberController.text = accNo.trim().isNotEmpty ? accNo : '';
+    _ifscCodeController.text = profileData['ifsc_code'] as String? ?? 
+                               profileData['ifsc'] as String? ?? '';
+    _bankBranchController.text = profileData['bank_branch'] as String? ?? 
+                                 profileData['branch_name'] as String? ?? 
+                                 profileData['branch'] as String? ?? '';
     
     // Load passport details
     _passportNumberController.text = profileData['passport_number'] as String? ?? '';
@@ -429,20 +461,24 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         'nationality': _nationalityController.text.trim().isEmpty ? null : _nationalityController.text.trim(),
         'religion': _religionController.text.trim().isEmpty ? null : _religionController.text.trim(),
         'place_of_birth': _placeOfBirthController.text.trim().isEmpty ? null : _placeOfBirthController.text.trim(),
-        'department': _departmentController.text.trim().isEmpty ? null : _departmentController.text.trim(),
-        'designation': _designationController.text.trim().isEmpty ? null : _designationController.text.trim(),
-        'position': _designationController.text.trim().isEmpty ? null : _designationController.text.trim(),
-        'branch': _branchController.text.trim().isEmpty ? null : _branchController.text.trim(),
-        'date_of_joining': _parseDate(_joiningDateController.text.trim()),
-        // Convert display format back to database format if needed (FULL TIME -> full_time)
-        'employment_type': _employmentType?.toUpperCase().replaceAll(' ', '_'),
-        'status': _status,
-        'is_active': _status == 'ACTIVE',
+        // HR-managed fields - should not be updated by employee
+        // 'department': _departmentController.text.trim().isEmpty ? null : _departmentController.text.trim(),
+        // 'designation': _designationController.text.trim().isEmpty ? null : _designationController.text.trim(),
+        // 'position': _designationController.text.trim().isEmpty ? null : _designationController.text.trim(),
+        // 'branch': _branchController.text.trim().isEmpty ? null : _branchController.text.trim(),
+        // 'date_of_joining': _parseDate(_joiningDateController.text.trim()),
+        // 'employment_type': _employmentType?.toUpperCase().replaceAll(' ', '_'),
+        // 'status': _status,
+        // 'is_active': _status == 'ACTIVE',
         'notice_period': _noticePeriodController.text.trim().isEmpty ? null : int.tryParse(_noticePeriodController.text.trim()),
         'father_name': _fatherNameController.text.trim().isEmpty ? null : _fatherNameController.text.trim(),
         'mother_name': _motherNameController.text.trim().isEmpty ? null : _motherNameController.text.trim(),
         'spouse_name': _spouseNameController.text.trim().isEmpty ? null : _spouseNameController.text.trim(),
-        'number_of_children': _numberOfChildrenController.text.trim().isEmpty ? null : int.tryParse(_numberOfChildrenController.text.trim()),
+        'number_of_children': _numberOfChildrenController.text.trim().isEmpty 
+            ? null 
+            : (int.tryParse(_numberOfChildrenController.text.trim()) != null 
+                ? (int.parse(_numberOfChildrenController.text.trim()) < 0 ? 0 : int.parse(_numberOfChildrenController.text.trim()))
+                : null),
         'current_address': _currentAddressController.text.trim().isEmpty ? null : _currentAddressController.text.trim(),
         'city': _cityController.text.trim().isEmpty ? null : _cityController.text.trim(),
         'state': _stateController.text.trim().isEmpty ? null : _stateController.text.trim(),
@@ -736,7 +772,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                              MaterialPageRoute(builder: (context) => const PrivacySecurityScreen()),
                             );
                           },
                           icon: const Icon(Icons.lock_outline, size: 16),
@@ -829,25 +865,28 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           shape: BoxShape.circle,
                         ),
                         child: (userAvatarUrl != null && userAvatarUrl.isNotEmpty)
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(40),
-                                child: Image.network(
-                                  userAvatarUrl,
-                                  width: 80,
-                                  height: 80,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Text(
-                                        initials,
-                                        style: TextStyle(
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue.shade700,
+                            ? GestureDetector(
+                                onTap: () => _showProfilePicturePreview(context, userAvatarUrl),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(40),
+                                  child: Image.network(
+                                    userAvatarUrl,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Text(
+                                          initials,
+                                          style: TextStyle(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue.shade700,
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  },
+                                      );
+                                    },
+                                  ),
                                 ),
                               )
                             : Center(
@@ -1014,21 +1053,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               _buildInfoRow(
                 'Department',
                 profileData?['department'] as String? ?? 'N/A',
-                controller: _departmentController,
                 icon: Icons.business,
               ),
               _buildInfoRow(
                 'Branch',
                 profileData?['branch'] as String? ?? 'N/A',
-                controller: _branchController,
                 icon: Icons.location_on,
               ),
               _buildInfoRow(
                 'Employment Type',
                 profileData?['employment_type'] as String? ?? 'FULL TIME',
-                dropdownValue: _employmentType,
-                dropdownItems: ['FULL TIME', 'PART TIME', 'CONTRACT', 'INTERN'],
-                onDropdownChanged: (value) => setState(() => _employmentType = value),
               ),
               _buildInfoRow(
                 'Notice Period',
@@ -1043,7 +1077,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               _buildInfoRow(
                 'Designation',
                 profileData?['designation'] as String? ?? profileData?['position'] as String? ?? 'N/A',
-                controller: _designationController,
                 icon: Icons.business_center,
               ),
               _buildInfoRow(
@@ -1051,17 +1084,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 profileData?['date_of_joining'] != null
                     ? DateFormat('dd/MM/yyyy').format(DateTime.parse(profileData!['date_of_joining']))
                     : 'N/A',
-                controller: _joiningDateController,
-                readOnly: true,
-                onTap: () => _selectDate(context, _joiningDateController, format: DateFormat('dd/MM/yyyy')),
-                    icon: Icons.calendar_today,
+                icon: Icons.calendar_today,
               ),
               _buildInfoRow(
                 'Status',
                 profileData?['status'] as String? ?? (profileData?['is_active'] == true ? 'ACTIVE' : 'INACTIVE'),
-                dropdownValue: _status,
-                dropdownItems: ['ACTIVE', 'INACTIVE'],
-                onDropdownChanged: (value) => setState(() => _status = value),
               ),
             ],
             cardColor: cardColor,
@@ -1160,9 +1187,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
               _buildInfoRow(
                 'Number of Children',
-                profileData?['number_of_children'] != null ? '${profileData!['number_of_children']}' : 'Not provided',
+                profileData?['number_of_children'] != null 
+                    ? ((profileData!['number_of_children'] as int) < 0 ? '0' : '${profileData!['number_of_children']}') 
+                    : 'Not provided',
                 controller: _numberOfChildrenController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                icon: Icons.child_care,
               ),
             ],
             cardColor: cardColor,
@@ -1392,13 +1423,18 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             children: [
               _buildInfoRow(
                 'Highest Qualification',
-                profileData?['highest_qualification'] as String? ?? 'N/A',
+                ((profileData?['highest_qualification'] as String? ?? '').isNotEmpty) ? profileData!['highest_qualification'] :
+                ((profileData?['qualification'] as String? ?? '').isNotEmpty) ? profileData!['qualification'] :
+                ((profileData?['education'] as String? ?? '').isNotEmpty) ? profileData!['education'] : 'N/A',
                 controller: _highestQualificationController,
                 hintText: 'B.Tech, MBA, etc.',
               ),
               _buildInfoRow(
                 'Institution/University',
-                profileData?['university'] as String? ?? 'N/A',
+                ((profileData?['university'] as String? ?? '').isNotEmpty) ? profileData!['university'] :
+                ((profileData?['institution'] as String? ?? '').isNotEmpty) ? profileData!['institution'] :
+                ((profileData?['college'] as String? ?? '').isNotEmpty) ? profileData!['college'] :
+                ((profileData?['school'] as String? ?? '').isNotEmpty) ? profileData!['school'] : 'N/A',
                 controller: _universityController,
                 hintText: 'University name',
               ),
@@ -1407,7 +1443,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   Expanded(
                     child: _buildInfoRow(
                       'Year of Completion',
-                      profileData?['year_of_completion'] != null ? '${profileData!['year_of_completion']}' : 'N/A',
+                      (profileData?['year_of_completion'] ?? profileData?['completion_year'] ?? profileData?['pass_out_year']) != null 
+                        ? '${profileData?['year_of_completion'] ?? profileData?['completion_year'] ?? profileData?['pass_out_year']}' 
+                        : 'N/A',
                       controller: _yearOfCompletionController,
                       keyboardType: TextInputType.number,
                       hintText: '2020',
@@ -1417,7 +1455,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   Expanded(
                     child: _buildInfoRow(
                       'Specialization/Field',
-                      profileData?['specialization'] as String? ?? 'N/A',
+                      ((profileData?['specialization'] as String? ?? '').isNotEmpty) ? profileData!['specialization'] :
+                      ((profileData?['field'] as String? ?? '').isNotEmpty) ? profileData!['field'] :
+                      ((profileData?['stream'] as String? ?? '').isNotEmpty) ? profileData!['stream'] : 'N/A',
                       controller: _specializationController,
                       hintText: 'Computer Science, etc.',
                     ),
@@ -1554,13 +1594,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             children: [
               _buildInfoRow(
                 'PAN Number',
-                profileData?['pan'] as String? ?? 'N/A',
+                profileData?['pan'] as String? ?? profileData?['pan_number'] as String? ?? 'N/A',
                 controller: _panController,
                 icon: Icons.badge,
               ),
               _buildInfoRow(
                 'Aadhaar Number',
-                profileData?['aadhaar'] as String? ?? 'N/A',
+                profileData?['aadhaar'] as String? ?? profileData?['aadhaar_number'] as String? ?? 'N/A',
                 controller: _aadhaarController,
                 icon: Icons.verified_user,
               ),
@@ -1620,20 +1660,26 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
               _buildInfoRow(
                 'Account Number',
-                profileData?['account_number'] as String? ?? 'N/A',
+                ((profileData?['account_number'] as String? ?? '').isNotEmpty) ? profileData!['account_number'] :
+                ((profileData?['account_no'] as String? ?? '').isNotEmpty) ? profileData!['account_no'] :
+                ((profileData?['bank_account_no'] as String? ?? '').isNotEmpty) ? profileData!['bank_account_no'] :
+                ((profileData?['bank_acc_no'] as String? ?? '').isNotEmpty) ? profileData!['bank_acc_no'] :
+                ((profileData?['bank_account_number'] as String? ?? '').isNotEmpty) ? profileData!['bank_account_number'] : 'N/A',
                 controller: _accountNumberController,
                 icon: Icons.numbers,
                 keyboardType: TextInputType.number,
               ),
               _buildInfoRow(
                 'IFSC Code',
-                profileData?['ifsc_code'] as String? ?? 'N/A',
+                profileData?['ifsc_code'] as String? ?? profileData?['ifsc'] as String? ?? 'N/A',
                 controller: _ifscCodeController,
                 icon: Icons.qr_code,
               ),
               _buildInfoRow(
                 'Branch',
-                profileData?['bank_branch'] as String? ?? 'N/A',
+                profileData?['bank_branch'] as String? ?? 
+                profileData?['branch_name'] as String? ?? 
+                profileData?['branch'] as String? ?? 'N/A',
                 controller: _bankBranchController,
                 icon: Icons.location_city,
               ),
@@ -1678,6 +1724,62 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final borderColor = isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1);
 
+    // Available years from payroll data, plus current year
+    final allYears = <int>{
+      DateTime.now().year,
+      ...payrollHistory.map((p) {
+        final date = p['pay_date'] ?? p['payroll_date'] ?? p['month'] ?? p['date'];
+        if (date == null) return DateTime.now().year;
+        try { return DateTime.parse(date.toString()).year; } catch (_) { return DateTime.now().year; }
+      }),
+    }.toList()..sort((a, b) => b.compareTo(a));
+
+    // Filter payroll list
+    final filtered = payrollHistory.where((p) {
+      final rawDate = p['pay_date'] ?? p['payroll_date'] ?? p['month'] ?? p['date'];
+      if (rawDate == null) return _selectedMonth == null && _selectedYear == null;
+      try {
+        final date = DateTime.parse(rawDate.toString());
+        if (_selectedMonth != null && date.month != _selectedMonth) return false;
+        if (_selectedYear != null && date.year != _selectedYear) return false;
+        return true;
+      } catch (_) { return true; }
+    }).toList();
+
+    final monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+
+    // Dropdown button builder helper
+    Widget filterDropdown({
+      required String hint,
+      required int? value,
+      required List<DropdownMenuItem<int>> items,
+      required void Function(int?) onChanged,
+    }) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            value: value,
+            hint: Text(hint, style: const TextStyle(fontSize: 12)),
+            isDense: true,
+            style: TextStyle(fontSize: 12, color: textColor),
+            dropdownColor: cardColor,
+            icon: Icon(Icons.arrow_drop_down, size: 18, color: Colors.grey.shade400),
+            items: items,
+            onChanged: (v) => setState(() => onChanged(v)),
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1700,29 +1802,31 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Month filter
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: const Text('All Months', style: TextStyle(fontSize: 12)),
-                    ),
+                  filterDropdown(
+                    hint: 'All Months',
+                    value: _selectedMonth,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All Months', style: TextStyle(fontSize: 12))),
+                      ...List.generate(12, (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text(monthNames[i], style: const TextStyle(fontSize: 12)),
+                      )),
+                    ],
+                    onChanged: (v) { _selectedMonth = v; },
                   ),
                   const SizedBox(width: 8),
                   // Year filter
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: const Text('All Years', style: TextStyle(fontSize: 12)),
-                    ),
+                  filterDropdown(
+                    hint: 'All Years',
+                    value: _selectedYear,
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('All Years', style: TextStyle(fontSize: 12))),
+                      ...allYears.map((y) => DropdownMenuItem(
+                        value: y,
+                        child: Text('$y', style: const TextStyle(fontSize: 12)),
+                      )),
+                    ],
+                    onChanged: (v) { _selectedYear = v; },
                   ),
                 ],
               ),
@@ -1731,7 +1835,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
           const SizedBox(height: 16),
 
-          if (payrollHistory.isEmpty)
+          if (filtered.isEmpty)
             Card(
                     elevation: 0,
                     color: cardColor,
@@ -1753,7 +1857,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               ),
             )
           else
-            ...payrollHistory.map((payslip) => Card(
+            ...filtered.map((payslip) => Card(
               elevation: 0,
               color: cardColor,
               shape: RoundedRectangleBorder(
@@ -1913,6 +2017,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     IconData? icon,
     int maxLines = 1,
     String? hintText,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : Colors.black87;
@@ -1933,10 +2038,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             TextFormField(
               controller: controller,
               readOnly: readOnly,
-              onTap: onTap,
-              keyboardType: keyboardType,
-              maxLines: maxLines,
-              style: TextStyle(color: textColor),
+                onTap: onTap,
+                keyboardType: keyboardType,
+                maxLines: maxLines,
+                inputFormatters: inputFormatters,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
               decoration: InputDecoration(
                 hintText: hintText,
                 prefixIcon: icon != null ? Icon(icon, size: 18, color: Colors.grey.shade600) : null,
@@ -2115,7 +2221,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
-                                    color: textColor,
+                                    color: isCurrentUser ? Colors.blue.shade900 : textColor,
                                   ),
                                 ),
                               ),
@@ -2139,7 +2245,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                           ),
                           subtitle: Text(
                             'Employee ID: $empId',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: 12, 
+                              color: isCurrentUser ? Colors.blue.shade700 : Colors.grey,
+                            ),
                           ),
                         ),
                       );
@@ -2162,5 +2271,70 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         SnackBar(content: Text('Error loading employees: $e')),
       );
     }
+  }
+
+  void _showProfilePicturePreview(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          clipBehavior: Clip.none, // Allow close button to be outside
+          alignment: Alignment.center,
+          children: [
+            Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const SizedBox(
+                      width: 200,
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(
+                    width: 200,
+                    height: 200,
+                    child: Icon(Icons.error, size: 50, color: Colors.red),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: -15,
+              right: -15,
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Icon(Icons.close, color: Colors.black, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

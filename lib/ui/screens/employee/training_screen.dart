@@ -65,7 +65,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
                 ],
@@ -119,11 +119,11 @@ class _TrainingScreenState extends State<TrainingScreen> {
 
               // Main Content Area
               Card(
-                elevation: 0,
+                elevation: 2,
                 color: cardColor,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(color: borderColor),
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide.none,
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(40),

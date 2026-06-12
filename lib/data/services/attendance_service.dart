@@ -299,6 +299,7 @@ class AttendanceService {
     required double longitude,
     required String address,
     String? earlyCheckoutReason,
+    bool isAutoCheckout = false,
   }) async {
     try {
       // Use UTC time for database storage to ensure consistency
@@ -321,8 +322,30 @@ class AttendanceService {
       String? checkOutLocationId;
       bool gpsVerified = false;
       
-      // Check if checking out from an office location
-      if (organizationId != null) {
+      // For auto-checkout, preserve the check-in work_type and try to get office location.
+      if (isAutoCheckout) {
+        final checkInLocationId = currentRecord?['check_in_location_id'] as String?;
+        if (checkInLocationId != null) {
+          try {
+            final office = await supabase
+                .from('office_locations')
+                .select('latitude, longitude, address, name')
+                .eq('id', checkInLocationId)
+                .maybeSingle();
+                
+            if (office != null) {
+              latitude = (office['latitude'] as num?)?.toDouble() ?? latitude;
+              longitude = (office['longitude'] as num?)?.toDouble() ?? longitude;
+              address = office['address'] as String? ?? office['name'] as String? ?? address;
+              checkOutLocationId = checkInLocationId;
+              gpsVerified = true;
+              print('Auto-checkout: Using office location details for $checkInLocationId');
+            }
+          } catch (e) {
+            print('Error fetching office location for auto-checkout: $e');
+          }
+        }
+      } else if (organizationId != null) {
         final officeLocations = await _getOfficeLocations(organizationId);
         final nearestOffice = _findNearestOfficeLocation(latitude, longitude, officeLocations);
         

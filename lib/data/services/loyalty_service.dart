@@ -91,10 +91,38 @@ class LoyaltyService {
                                  profile?['full_name'] as String? ??
                                  'Employee';
 
-      final String designation = empData['designation'] as String? ?? 
-                                 empData['position'] as String? ??
-                                 empData['job_title'] as String? ??
-                                 'Team Member';
+      // Robust Designation Resolution
+      String? resolvedDesignation = profile?['designation'] as String? ?? 
+                                   profile?['job_title'] as String? ??
+                                   empData['designation'] as String? ?? 
+                                   empData['position'] as String? ??
+                                   empData['job_title'] as String?;
+
+      if (resolvedDesignation == null || resolvedDesignation.isEmpty || resolvedDesignation.trim().isEmpty) {
+        final designationId = (empData['designation_id'] ?? profile?['designation_id']) as String?;
+        if (designationId != null && designationId.isNotEmpty) {
+          try {
+            final designationRow = await supabase
+                .from('designations')
+                .select()
+                .eq('id', designationId)
+                .maybeSingle();
+            
+            if (designationRow != null) {
+              resolvedDesignation = designationRow['name'] as String? ??
+                                   designationRow['title'] as String? ??
+                                   designationRow['designation'] as String? ??
+                                   designationRow['designation_name'] as String? ??
+                                   designationRow['position'] as String? ??
+                                   designationRow['job_title'] as String?;
+            }
+          } catch (e) {
+             print('LoyaltyService: Error fetching from designations table: $e');
+          }
+        }
+      }
+
+      final String designation = resolvedDesignation ?? 'Team Member';
 
       final String role = profile?['role'] as String? ?? 
                           empData['role'] as String? ?? 

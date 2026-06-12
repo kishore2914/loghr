@@ -50,12 +50,12 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       return;
     }
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AnnouncementFormScreen(organizationId: orgId),
-      ),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _AnnouncementFormDialog(organizationId: orgId),
     ).then((_) {
-      // Refresh list after returning
+      // Refresh list after dialog closes
       _loadAnnouncements();
     });
   }
@@ -101,7 +101,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                        Container(
                         decoration: BoxDecoration(
                           color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
                           ],
@@ -163,7 +163,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.withOpacity(0.2)),
       ),
       child: DropdownButtonHideUnderline(
@@ -181,7 +181,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
@@ -228,23 +228,33 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   }
 }
 
-class AnnouncementFormScreen extends StatefulWidget {
+class _AnnouncementFormDialog extends StatefulWidget {
   final String organizationId;
-  const AnnouncementFormScreen({super.key, required this.organizationId});
+  const _AnnouncementFormDialog({required this.organizationId});
 
   @override
-  State<AnnouncementFormScreen> createState() => _AnnouncementFormScreenState();
+  State<_AnnouncementFormDialog> createState() => _AnnouncementFormDialogState();
 }
 
-class _AnnouncementFormScreenState extends State<AnnouncementFormScreen> {
+class _AnnouncementFormDialogState extends State<_AnnouncementFormDialog> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
+  final _expiresController = TextEditingController(text: '30');
   final AdminService _adminService = AdminService();
-  
-  String _category = 'GENERAL';
-  String _priority = 'NORMAL';
+
+  String _type = 'General';
+  String _priority = 'Low';
+  String _sendTo = 'All Employees';
   bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    _expiresController.dispose();
+    super.dispose();
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -254,73 +264,293 @@ class _AnnouncementFormScreenState extends State<AnnouncementFormScreen> {
       'organization_id': widget.organizationId,
       'title': _titleController.text.trim(),
       'content': _contentController.text.trim(),
-      'category': _category,
-      'priority': _priority,
+      'priority': _priority.toUpperCase(),
       'is_new': true,
-      'is_read': false, // Admin posted it, so it's new for others
+      'is_read': false,
     });
 
     if (mounted) {
       setState(() => _isSaving = false);
       if (success) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement posted')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Announcement posted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to post announcement')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to post announcement')),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Announcement'),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child: _isSaving 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-              : const Text('POST', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500),
+        child: SingleChildScrollView(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+              // Purple Gradient Header
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.deepPurple.shade600, Colors.purple.shade400],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Create New Announcement',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Share important news with your team',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
-                items: ['GENERAL', 'HR', 'IT', 'FINANCE', 'OPERATIONS']
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (v) => setState(() => _category = v!),
+
+              // Form Body
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      _buildLabel('Title', isRequired: true),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _titleController,
+                        decoration: _inputDecoration('Enter announcement title', isDark),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Content
+                      _buildLabel('Content', isRequired: true),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _contentController,
+                        maxLines: 4,
+                        decoration: _inputDecoration('Write your announcement message...', isDark),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Content is required' : null,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Type + Priority row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildLabel('Type'),
+                                const SizedBox(height: 6),
+                                _buildStyledDropdown(
+                                  value: _type,
+                                  items: ['General', 'HR', 'IT', 'Finance', 'Operations'],
+                                  onChanged: (v) => setState(() => _type = v!),
+                                  icon: Icons.category_rounded,
+                                  iconColor: Colors.deepPurple,
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildLabel('Priority'),
+                                const SizedBox(height: 6),
+                                _buildStyledDropdown(
+                                  value: _priority,
+                                  items: ['Low', 'Normal', 'High', 'Urgent'],
+                                  onChanged: (v) => setState(() => _priority = v!),
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Send To
+                      _buildLabel('Send To', isRequired: true),
+                      const SizedBox(height: 6),
+                      _buildStyledDropdown(
+                        value: _sendTo,
+                        items: ['All Employees', 'Department', 'Specific Team'],
+                        onChanged: (v) => setState(() => _sendTo = v!),
+                        isDark: isDark,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Expires In
+                      _buildLabel('Expires In (Days)'),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _expiresController,
+                        keyboardType: TextInputType.number,
+                        decoration: _inputDecoration('30', isDark),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _priority,
-                decoration: const InputDecoration(labelText: 'Priority', border: OutlineInputBorder()),
-                items: ['LOW', 'NORMAL', 'HIGH', 'URGENT']
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (v) => setState(() => _priority = v!),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _contentController,
-                maxLines: 5,
-                decoration: const InputDecoration(labelText: 'Content', border: OutlineInputBorder(), alignLabelWithHint: true),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
+
+              // Buttons
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _save,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18, height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.send_rounded, size: 16),
+                      label: Text(_isSaving ? 'Sending...' : 'Create & Send'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text, {bool isRequired = false}) {
+    return RichText(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+        children: isRequired
+            ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))]
+            : [],
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint, bool isDark) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.deepPurple.shade400, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+  }
+
+  Widget _buildStyledDropdown({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    IconData? icon,
+    Color? iconColor,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2A2A2A) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isExpanded: true,
+          dropdownColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: Colors.grey.shade500),
+          items: items.map((item) => DropdownMenuItem(
+            value: item,
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: iconColor ?? Colors.grey),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(item, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          )).toList(),
+          onChanged: onChanged,
         ),
       ),
     );

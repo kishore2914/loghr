@@ -210,24 +210,30 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 
   Widget _buildSearchField(bool isDark) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
-      ),
-      child: TextField(
-        controller: _searchController,
-        style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
-        decoration: InputDecoration(
-          hintText: 'Search title or content',
-          hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-          prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+    return TextField(
+      controller: _searchController,
+      style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+      decoration: InputDecoration(
+        hintText: 'Search title or content',
+        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+        prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+        filled: true,
+        fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
         ),
-        onChanged: (_) => setState(() {}),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+        ),
       ),
+      onChanged: (_) => setState(() {}),
     );
   }
 

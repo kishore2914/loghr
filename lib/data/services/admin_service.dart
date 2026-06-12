@@ -66,6 +66,33 @@ class AdminService {
     }
   }
 
+  // Get count of employees on leave today
+  Future<int> getOnLeaveTodayCount() async {
+    try {
+      final today = DateTime.now();
+      final dateStr = DateFormat('yyyy-MM-dd').format(today);
+
+      final tables = ['leave_applications', 'leaves', 'leave_requests'];
+      for (var table in tables) {
+        try {
+          final data = await supabase
+              .from(table)
+              .select('id')
+              .eq('status', 'approved')
+              .lte('start_date', dateStr)
+              .gte('end_date', dateStr);
+          return data.length;
+        } catch (e) {
+          continue;
+        }
+      }
+      return 0;
+    } catch (e) {
+      print('Error fetching on leave today count: $e');
+      return 0;
+    }
+  }
+
   // Get total active employees (for denominator)
   Future<int> getTotalActiveEmployees() async {
     try {
@@ -793,13 +820,50 @@ class AdminService {
       final targetDate = date ?? DateTime.now();
       final dateStr = DateFormat('yyyy-MM-dd').format(targetDate);
       
+      // 1. Fetch attendance with employees to get user_id
       final data = await supabase
           .from('attendance_records')
-          .select('*, user_profiles(*)')
+          .select('*, employees(user_id)') 
           .eq('date', dateStr)
           .order('check_in_time', ascending: false);
       
-      return List<Map<String, dynamic>>.from(data);
+      final records = List<Map<String, dynamic>>.from(data as List);
+      
+      if (records.isEmpty) return [];
+
+      // 2. Extract User IDs
+      final userIds = <String>{};
+      for (var record in records) {
+        final employees = record['employees'] as Map<String, dynamic>?;
+        if (employees != null && employees['user_id'] != null) {
+          userIds.add(employees['user_id'] as String);
+        }
+      }
+
+      if (userIds.isEmpty) return records;
+
+      // 3. Fetch User Profiles
+      final profiles = await supabase
+          .from('user_profiles')
+          .select('user_id, full_name')
+          .inFilter('user_id', userIds.toList());
+      
+      final profileMap = {
+        for (var p in profiles) p['user_id'] as String: p
+      };
+
+      // 4. Inject user_profiles into records
+      return records.map((record) {
+        final employees = record['employees'] as Map<String, dynamic>?;
+        final userId = employees?['user_id'] as String?;
+        final profile = userId != null ? profileMap[userId] : null;
+
+        return {
+          ...record,
+          'user_profiles': profile, // Injecting explicitly for UI compatibility
+        };
+      }).toList();
+
     } catch (e) {
       print('Error fetching all attendance: $e');
       // Try fallback to 'attendance' table if 'attendance_records' fails
@@ -844,16 +908,161 @@ class AdminService {
     ];
   }
 
+  // Get Actual Designations from Database
+  Future<List<String>> getDesignations() async {
+    try {
+      // Try fetching from designations table first
+      final data = await supabase
+          .from('designations')
+          .select('name')
+          .order('name', ascending: true);
+      
+      if (data != null && (data as List).isNotEmpty) {
+        return (data as List).map((d) => d['name'].toString()).toList();
+      }
+      
+      // Fallback: try fetching unique designations from user_profiles
+      final profileData = await supabase
+          .from('user_profiles')
+          .select('designation')
+          .not('designation', 'is', null);
+      
+      final distinctDesignations = (profileData as List)
+          .map((item) => item['designation']?.toString() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toSet()
+          .toList();
+      
+      distinctDesignations.sort();
+      return distinctDesignations;
+    } catch (e) {
+      print('Error fetching designations: $e');
+      return ['Technical', 'Operations', 'Management', 'HR']; // Safe defaults if everything fails
+    }
+  }
+
   // Get Tasks Stats (Mock)
   Future<Map<String, dynamic>> getTasksStats() async {
     // Simulating loading
     await Future.delayed(const Duration(milliseconds: 300));
     return {
-      'completion_rate': 75,
-      'completed': 45,
-      'total': 60,
-      'pending': 15,
+      'total': 2,
+      'todo': 0,
+      'in_progress': 0,
+      'in_review': 0,
+      'completed': 1,
+      'overdue': 0,
     };
+  }
+
+  // Get All Tasks (Mock)
+  Future<List<Map<String, dynamic>>> getAllTasks() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return [
+      {
+        'id': 'TASK-102',
+        'title': 'Task',
+        'type': 'FEATURE',
+        'priority': 'MEDIUM',
+        'assignee': {'name': 'Virat Kohli', 'avatar': null},
+        'due_date': '2026-01-31',
+        'status': 'COMPLETED',
+      },
+       {
+        'id': 'TASK-103',
+        'title': 'API Integration',
+        'type': 'BUG',
+        'priority': 'HIGH',
+        'assignee': {'name': 'Rohit Sharma', 'avatar': null},
+        'due_date': '2026-02-20',
+        'status': 'TODO',
+      },
+    ];
+  }
+
+  // Get Leave Analytics (Mock)
+  Future<Map<String, dynamic>> getLeaveAnalytics() async {
+    // Simulating loading
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Mock Data
+    return {
+      'totalRequests': 24,
+      'pendingRequests': 5,
+      'approvedRequests': 18,
+      'rejectedRequests': 1,
+      'onLeaveToday': 2,
+      'upcomingLeaves': 3,
+      'monthlyTrends': [
+        {'month': 'Sep', 'count': 12},
+        {'month': 'Oct', 'count': 8},
+        {'month': 'Nov', 'count': 15},
+        {'month': 'Dec', 'count': 22},
+        {'month': 'Jan', 'count': 18},
+        {'month': 'Feb', 'count': 24},
+      ],
+      'typeDistribution': [
+        {'name': 'Casual Leave', 'count': 40, 'color': 0xFF2196F3},
+        {'name': 'Sick Leave', 'count': 30, 'color': 0xFFF44336},
+        {'name': 'Earned Leave', 'count': 20, 'color': 0xFF4CAF50},
+        {'name': 'WFH', 'count': 10, 'color': 0xFFFF9800},
+      ],
+    };
+  }
+
+  // Get Leave Types (Mock)
+  Future<List<Map<String, dynamic>>> getLeaveTypes() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return [
+      {
+        'id': '1',
+        'name': 'Annual Leave Global',
+        'code': 'AL',
+        'description': '-',
+        'paid': true,
+        'maxDays': null,
+        'requiresDoc': false,
+        'carryForward': false,
+        'status': 'Active',
+        'allocated': 24,
+      },
+      {
+        'id': '2',
+        'name': 'Work From Home 2 Global',
+        'code': 'WFH',
+        'description': '-',
+        'paid': true,
+        'maxDays': null,
+        'requiresDoc': false,
+        'carryForward': false,
+        'status': 'Active',
+        'allocated': 24,
+      },
+       {
+        'id': '3',
+        'name': 'Sick Leave',
+        'code': 'SL',
+        'description': 'Medical certificate required > 2 days',
+        'paid': true,
+        'maxDays': 12,
+        'requiresDoc': true,
+        'carryForward': true,
+        'status': 'Active',
+        'allocated': 12,
+      },
+       {
+        'id': '4',
+        'name': 'Loss of Pay',
+        'code': 'LOP',
+        'description': 'Unpaid leave',
+        'paid': false,
+        'maxDays': null,
+        'requiresDoc': false,
+        'carryForward': false,
+        'status': 'Active',
+        'allocated': 0,
+      },
+    ];
   }
 }
 

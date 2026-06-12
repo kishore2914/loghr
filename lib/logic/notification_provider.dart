@@ -12,6 +12,12 @@ class NotificationProvider extends ChangeNotifier {
   String? _error;
   RealtimeChannel? _notificationChannel;
   RealtimeChannel? _taskChannel;
+  RealtimeChannel? _leaveChannel;
+  RealtimeChannel? _announcementChannel;
+  RealtimeChannel? _payslipChannel;
+  RealtimeChannel? _expenseChannel;
+  RealtimeChannel? _chargeChannel;
+  RealtimeChannel? _policyChannel;
   String? _organizationName;
   String? _logoLocalPath;
 
@@ -96,6 +102,12 @@ class NotificationProvider extends ChangeNotifier {
     // Cancel existing subscriptions if any
     _notificationChannel?.unsubscribe();
     _taskChannel?.unsubscribe();
+    _leaveChannel?.unsubscribe();
+    _announcementChannel?.unsubscribe();
+    _payslipChannel?.unsubscribe();
+    _expenseChannel?.unsubscribe();
+    _chargeChannel?.unsubscribe();
+    _policyChannel?.unsubscribe();
     
     // 1. SET UP LISTENERS IMMEDIATELY (using userId as a first guess for tasks too)
     // Most notifications are linked to userId (auth UID)
@@ -152,13 +164,34 @@ class NotificationProvider extends ChangeNotifier {
 
       print('NotificationProvider: 📍 Found orgId: $orgId, employeeId: $employeeId');
 
-      // Update Task Listener if we found a valid ID
+      // Update ID-based Listeners if we found a valid ID
       final effectiveTaskId = employeeId ?? userId;
+      
       _taskChannel?.unsubscribe();
       _taskChannel = _service.subscribeToTasks(effectiveTaskId, _onNewTask);
 
-      // 3. Fetch Organization Branding
+      if (employeeId != null) {
+        _leaveChannel?.unsubscribe();
+        _leaveChannel = _service.subscribeToLeaveUpdates(employeeId, _onLeaveUpdate);
+
+        _payslipChannel?.unsubscribe();
+        _payslipChannel = _service.subscribeToPayslips(employeeId, _onPayslipGenerated);
+
+        _expenseChannel?.unsubscribe();
+        _expenseChannel = _service.subscribeToExpenseUpdates(employeeId, _onExpenseUpdate);
+
+        _chargeChannel?.unsubscribe();
+        _chargeChannel = _service.subscribeToCharges(employeeId, _onNewCharge);
+      }
+
+      // 3. Fetch Organization Branding & Org-wide listeners
       if (orgId != null) {
+        _announcementChannel?.unsubscribe();
+        _announcementChannel = _service.subscribeToAnnouncements(orgId, _onNewAnnouncement);
+
+        _policyChannel?.unsubscribe();
+        _policyChannel = _service.subscribeToPolicies(orgId, _onNewPolicy);
+
         final orgQuery = await supabase
             .from('organizations')
             .select()
@@ -222,10 +255,119 @@ class NotificationProvider extends ChangeNotifier {
         : '📋 New Task: $taskTitle';
         
     _service.showLocalPopup(
-      id: newTaskRecord['id'].hashCode,
+      id: (newTaskRecord['id'] as String? ?? 'task').hashCode,
       title: brandedTitle,
       body: taskDesc,
       payload: newTaskRecord.toString(),
+      organizationName: _organizationName,
+      largeIconPath: _logoLocalPath,
+    );
+  }
+
+  void _onLeaveUpdate(Map<String, dynamic> record) {
+    final status = record['status'] as String? ?? 'updated';
+    // Only notify on relevant status changes
+    if (['approved', 'rejected'].contains(status.toLowerCase())) {
+       final brandedTitle = _organizationName != null 
+          ? '[$_organizationName] Leave $status' 
+          : '📅 Leave ${status.toUpperCase()}';
+          
+       _service.showLocalPopup(
+        id: (record['id'] as String? ?? 'leave').hashCode,
+        title: brandedTitle,
+        body: 'Your leave application starting ${record['start_date']?.toString().split('T')[0]} has been $status.',
+        payload: record.toString(),
+        organizationName: _organizationName,
+        largeIconPath: _logoLocalPath,
+      );
+    }
+  }
+
+  void _onNewAnnouncement(Map<String, dynamic> record) {
+    final title = record['title'] as String? ?? 'Announcement';
+    final brandedTitle = _organizationName != null 
+        ? '[$_organizationName] $title' 
+        : '📢 $title';
+        
+    _service.showLocalPopup(
+      id: (record['id'] as String? ?? 'ann').hashCode,
+      title: brandedTitle,
+      body: record['content'] as String? ?? 'New announcement posted.',
+      payload: record.toString(),
+      organizationName: _organizationName,
+      largeIconPath: _logoLocalPath,
+    );
+  }
+
+  void _onPayslipGenerated(Map<String, dynamic> record) {
+    // Only notify if status is 'generated' or 'published' or similar if applicable
+    // Assuming insert means it's available
+    final month = record['pay_period_month'];
+    final year = record['pay_period_year'];
+    
+    final brandedTitle = _organizationName != null 
+        ? '[$_organizationName] Payslip Available' 
+        : '💰 Payslip Available';
+        
+    _service.showLocalPopup(
+      id: (record['id'] as String? ?? 'payslip').hashCode,
+      title: brandedTitle,
+      body: 'Payslip for $month/$year is now available.',
+      payload: record.toString(),
+      organizationName: _organizationName,
+      largeIconPath: _logoLocalPath,
+    );
+  }
+
+  void _onExpenseUpdate(Map<String, dynamic> record) {
+    final status = record['status'] as String? ?? 'updated';
+    // Notify on resolution
+    if (['approved', 'rejected', 'settled', 'reimbursed'].contains(status.toLowerCase())) {
+      final amount = record['amount']; 
+      final brandedTitle = _organizationName != null 
+          ? '[$_organizationName] Expense $status' 
+          : '💸 Expense ${status.toUpperCase()}';
+          
+      _service.showLocalPopup(
+        id: (record['id'] as String? ?? 'exp').hashCode,
+        title: brandedTitle,
+        body: 'Your expense claim for $amount has been $status.',
+        payload: record.toString(),
+        organizationName: _organizationName,
+        largeIconPath: _logoLocalPath,
+      );
+    }
+  }
+
+  void _onNewCharge(Map<String, dynamic> record) {
+    final amount = record['amount'];
+    final type = record['charge_type'] ?? 'Deduction';
+    
+    final brandedTitle = _organizationName != null 
+        ? '[$_organizationName] New Charge' 
+        : '⚠️ New Charge Added';
+        
+    _service.showLocalPopup(
+      id: (record['id'] as String? ?? 'charge').hashCode,
+      title: brandedTitle,
+      body: 'A new $type of $amount has been added to your record.',
+      payload: record.toString(),
+      organizationName: _organizationName,
+      largeIconPath: _logoLocalPath,
+    );
+  }
+
+  void _onNewPolicy(Map<String, dynamic> record) {
+    final title = record['title'] as String? ?? 'New Policy';
+    final brandedTitle = _organizationName != null 
+        ? '[$_organizationName] Policy Update' 
+        : '📜 New Policy Added';
+        
+    _service.showLocalPopup(
+      id: (record['id'] as String? ?? 'pol').hashCode,
+      title: brandedTitle,
+      body: title,
+      payload: record.toString(),
       organizationName: _organizationName,
       largeIconPath: _logoLocalPath,
     );
@@ -235,6 +377,12 @@ class NotificationProvider extends ChangeNotifier {
   void dispose() {
     _notificationChannel?.unsubscribe();
     _taskChannel?.unsubscribe();
+    _leaveChannel?.unsubscribe();
+    _announcementChannel?.unsubscribe();
+    _payslipChannel?.unsubscribe();
+    _expenseChannel?.unsubscribe();
+    _chargeChannel?.unsubscribe();
+    _policyChannel?.unsubscribe();
     super.dispose();
   }
 }

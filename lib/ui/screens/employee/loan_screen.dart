@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:loghr_mobile/logic/auth_provider.dart';
 import 'package:loghr_mobile/logic/loan_provider.dart';
+import 'package:loghr_mobile/logic/profile_provider.dart';
 import 'package:loghr_mobile/data/models/loan.dart';
 
 class LoanScreen extends StatefulWidget {
@@ -41,10 +42,13 @@ class _LoanScreenState extends State<LoanScreen> {
   void _loadData() {
     final authProvider = context.read<AuthProvider>();
     final loanProvider = context.read<LoanProvider>();
+    final profileProvider = context.read<ProfileProvider>();
     final user = authProvider.user;
     
     if (user != null) {
-      loanProvider.checkEligibility(user.id);
+      // Pass the already loaded profile data to the loan provider
+      // This ensures we use the same DOJ/Status that is displayed on the profile screen
+      loanProvider.checkEligibility(user.id, userProfile: profileProvider.profileData);
       loanProvider.loadUserLoans(user.id);
     }
   }
@@ -122,6 +126,24 @@ class _LoanScreenState extends State<LoanScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: widget.onNavigateToDashboard != null
+          ? AppBar(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back, color: textColor),
+                onPressed: widget.onNavigateToDashboard,
+              ),
+              title: Text(
+                'Loan Applications',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+            )
+          : null,
       body: SafeArea(
         child: Consumer<LoanProvider>(
           builder: (context, loanProvider, _) {
@@ -136,79 +158,61 @@ class _LoanScreenState extends State<LoanScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header with optional back button + title + Apply button
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Header row: subtitle + Apply button
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      if (widget.onNavigateToDashboard != null) ...[
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: widget.onNavigateToDashboard,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Keep \"Loan Applications\" on a single line and scale down if needed
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    'Loan Applications',
-                                    style: TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.bold,
-                                      color: textColor,
-                                    ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.onNavigateToDashboard == null)
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Loan Applications',
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'View and apply for employee loans',
-                                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                                ),
-                              ],
+                              ),
+                            const Text(
+                              'View and apply for employee loans',
+                              style: TextStyle(fontSize: 14, color: Colors.grey),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: (isEligible && !loanProvider.isLoading)
-                                ? () {
-                                    // Scroll to form section if eligible
-                                    // (form is shown below only when eligible)
-                                  }
-                                : null,
-                            icon: const Icon(Icons.add, size: 18),
-                            label: Text(
-                              isEligible ? 'Apply Loan' : 'Apply Loan (Not Eligible)',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              backgroundColor: isEligible ? Colors.blue : Colors.grey.shade400,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: (isEligible && !loanProvider.isLoading)
+                            ? () {}
+                            : null,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(
+                          isEligible ? 'Apply Loan' : 'Apply Loan (Not Eligible)',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          backgroundColor: isEligible ? Colors.blue : Colors.grey.shade400,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
 
-                  // Eligibility Card (yellow banner style)
+                  // Eligibility Card (target design)
                   Card(
                     elevation: 0,
-                    color: Colors.amber.shade50,
+                    color: isDark ? Colors.black : Colors.amber.shade50,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: BorderSide(
-                        color: Colors.amber.shade200,
+                        color: isDark ? Colors.amber : Colors.amber.shade200,
                         width: 1.5,
                       ),
                     ),
@@ -221,39 +225,53 @@ class _LoanScreenState extends State<LoanScreen> {
                             children: [
                               Icon(
                                 Icons.info_outline,
-                                color: Colors.amber.shade800,
+                                color: isDark ? Colors.amber : Colors.amber.shade900,
                                 size: 22,
                               ),
                               const SizedBox(width: 8),
-                              const Text(
+                              Text(
                                 'Eligibility Requirements',
                                 style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.amber : Colors.amber.shade900, 
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           if (eligibility != null) ...[
+                            _buildInfoRow(
+                              'Date of Joining',
+                              eligibility['dateOfJoining'] != null 
+                                  ? DateFormat('MMM d, yyyy').format(DateTime.parse(eligibility['dateOfJoining']))
+                                  : 'Not Set',
+                              isDark ? Colors.amber : Colors.black87,
+                              isLabelColored: true,
+                            ),
                             _buildInfoRow(
                               'Months completed',
                               '$monthsWorked / 6 required',
-                              textColor,
+                              isDark ? Colors.amber : Colors.black87,
+                              isLabelColored: true,
                             ),
                             _buildInfoRow(
                               'Employment status',
                               (eligibility['status'] as String? ?? 'Unknown'),
-                              textColor,
+                              isDark ? Colors.amber : Colors.black87,
+                              isLabelColored: true,
+                              isBoldValue: true,
                             ),
                             const SizedBox(height: 8),
                             Text(
                               isEligible
-                                  ? 'You meet the eligibility criteria to apply for a loan.'
-                                  : 'You need to complete 6 months of service. Currently completed: $monthsWorked months.',
+                                  ? 'You meet the 6-month eligibility criteria to apply for a loan.'
+                                  : monthsWorked < 6 
+                                      ? 'You need to complete 6 months of service. Currently completed: $monthsWorked months.'
+                                      : 'You are not currently eligible based on your employment status.',
                               style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.amber.shade800,
+                                fontSize: 14,
+                                color: isDark ? Colors.amber : Colors.black87,
                               ),
                             ),
                           ] else
@@ -261,7 +279,7 @@ class _LoanScreenState extends State<LoanScreen> {
                               'Unable to determine eligibility. Please contact HR.',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.amber.shade800,
+                                color: isDark ? Colors.amber : Colors.black87,
                               ),
                             ),
                         ],
@@ -413,7 +431,7 @@ class _LoanScreenState extends State<LoanScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, Color textColor) {
+  Widget _buildInfoRow(String label, String value, Color textColor, {bool isLabelColored = false, bool isBoldValue = true}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
@@ -423,8 +441,8 @@ class _LoanScreenState extends State<LoanScreen> {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
+                fontSize: 16,
+                color: isLabelColored ? textColor : Colors.grey.shade600,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -435,8 +453,8 @@ class _LoanScreenState extends State<LoanScreen> {
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                fontWeight: isBoldValue ? FontWeight.bold : FontWeight.normal,
                 color: textColor,
               ),
             ),

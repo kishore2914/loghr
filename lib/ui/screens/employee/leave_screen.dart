@@ -70,6 +70,14 @@ class _LeaveScreenState extends State<LeaveScreen> {
             }
           },
         ),
+        title: Text(
+          'Leave Management',
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -78,11 +86,7 @@ class _LeaveScreenState extends State<LeaveScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              const Text(
-                'Leave Management',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 0),
               const Text(
                 'Manage your leave applications and balances',
                 style: TextStyle(fontSize: 14, color: Colors.grey),

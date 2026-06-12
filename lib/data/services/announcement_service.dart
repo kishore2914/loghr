@@ -20,11 +20,11 @@ class AnnouncementService {
       }
 
       // Filter for active announcements if column exists
-      try {
-        query = query.eq('is_active', true);
-      } catch (e) {
-        // Ignore if column doesn't exist
-      }
+      // try {
+      //   query = query.eq('is_active', true);
+      // } catch (e) {
+      //   // Ignore if column doesn't exist
+      // }
       
       final response = await query.order('created_at', ascending: false);
 

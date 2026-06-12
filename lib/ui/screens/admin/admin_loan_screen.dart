@@ -281,7 +281,7 @@ class _AdminLoanScreenState extends State<AdminLoanScreen> {
 
   Widget _buildLoanCard(LoanApplication loan, Color cardColor, Color textColor) {
     return Card(
-      elevation: 0,
+      elevation: 2,
       color: cardColor,
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(

@@ -17,6 +17,7 @@ class LoanApplication {
   final DateTime? approvedAt;
   final DateTime? rejectedAt;
   final double? grossSalary; // For eligibility checking
+  final String? employeeName;
 
   LoanApplication({
     required this.id,
@@ -31,6 +32,7 @@ class LoanApplication {
     this.approvedAt,
     this.rejectedAt,
     this.grossSalary,
+    this.employeeName,
   });
 
   factory LoanApplication.fromJson(Map<String, dynamic> json) {
@@ -57,9 +59,10 @@ class LoanApplication {
       rejectedAt: json['updated_at'] != null && (json['status'] == 'rejected') // Schema has updated_at, separate rejected_at not in CREATE TABLE provided? 
       // Wait, schema provided: approved_at IS there. rejected_at IS NOT.
       // created_at, updated_at ARE there.
-          ? DateTime.parse(json['updated_at'] as String)
+           ? DateTime.parse(json['updated_at'] as String)
           : null,
       grossSalary: (json['gross_salary'] as num?)?.toDouble(),
+      employeeName: json['employee_name'] as String?,
     );
   }
 

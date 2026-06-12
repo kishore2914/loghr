@@ -6,8 +6,8 @@ class LoanRepository {
 
   LoanRepository(this._service);
 
-  Future<Map<String, dynamic>> getEmployeeEligibility(String userId) async {
-    return await _service.getEmployeeEligibility(userId);
+  Future<Map<String, dynamic>> getEmployeeEligibility(String userId, {Map<String, dynamic>? userProfile}) async {
+    return await _service.getEmployeeEligibility(userId, userProfile: userProfile);
   }
 
   double? getMaxLoanAmount(int monthsWorked, double? grossSalary) {

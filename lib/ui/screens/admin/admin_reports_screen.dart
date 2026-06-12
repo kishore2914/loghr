@@ -17,7 +17,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   final List<String> _reportTypes = [
     'Attendance',
     'Leave',
-    'Payroll',
+    // 'Payroll', // Removed
     'Employee Master',
     'Expense',
   ];
@@ -89,131 +89,150 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF1A237E);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Reports'),
-        elevation: 0,
-      ),
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.grey.shade50,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark 
-                      ? [Colors.blue.shade900, Colors.blue.shade800] 
-                      : [Colors.blue.shade50, Colors.white],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.blue.withOpacity(0.2)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.description, color: Colors.blue, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Generate Reports',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Select type and date range to export data',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              const Text('Report Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _reportTypes.map((type) {
-                  final isSelected = _selectedReportType == type;
-                  return ChoiceChip(
-                    label: Text(type),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() => _selectedReportType = type);
-                    },
-                    selectedColor: Colors.blue.withOpacity(0.2),
-                    labelStyle: TextStyle(
-                      color: isSelected ? Colors.blue : (isDark ? Colors.white70 : Colors.black87),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 24),
-              const Text('Date Range', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              
               Row(
                 children: [
                   Expanded(
-                    child: _buildDateSelector(
-                      context, 
-                      'From', 
-                      _startDate, 
-                      () => _selectDate(context, true),
-                      isDark,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Reports Center',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Generate and analyze organization data',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildDateSelector(
-                      context, 
-                      'To', 
-                      _endDate, 
-                      () => _selectDate(context, false),
-                      isDark,
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        if (!isDark)
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                      ],
                     ),
+                    child: Icon(Icons.analytics_outlined, color: Colors.blue.shade700),
                   ),
                 ],
               ),
+              const SizedBox(height: 32),
+
+              Text(
+                'Report Category',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 1.1,
+                ),
+                itemCount: _reportTypes.length,
+                itemBuilder: (context, index) {
+                  final type = _reportTypes[index];
+                  final isSelected = _selectedReportType == type;
+                  return _buildReportTypeCard(type, isSelected, isDark);
+                },
+              ),
+
+              const SizedBox(height: 32),
+              Text(
+                'Date Range',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1)),
+                ),
+                child: Column(
+                  children: [
+                    _buildDateRow('Start Date', _startDate, () => _selectDate(context, true), Icons.calendar_today, Colors.blue, isDark),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Divider(height: 1),
+                    ),
+                    _buildDateRow('End Date', _endDate, () => _selectDate(context, false), Icons.event_available, Colors.teal, isDark),
+                  ],
+                ),
+              ),
 
               const SizedBox(height: 40),
-
               SizedBox(
                 width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
+                height: 56,
+                child: ElevatedButton(
                   onPressed: _isGenerating ? null : _generateReport,
-                  icon: _isGenerating 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                    : const Icon(Icons.download),
-                  label: Text(_isGenerating ? 'Generating...' : 'Generate Report'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: Colors.blue.shade700,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
+                  child: _isGenerating
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 20),
+                            SizedBox(width: 12),
+                            Text(
+                              'Generate Insights',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  'Reports will be generated in PDF & Excel formats',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
               ),
             ],
@@ -223,34 +242,85 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
     );
   }
 
-  Widget _buildDateSelector(BuildContext context, String label, DateTime date, VoidCallback onTap, bool isDark) {
+  Widget _buildReportTypeCard(String type, bool isSelected, bool isDark) {
+    IconData icon;
+    Color color;
+    switch (type) {
+      case 'Attendance': icon = Icons.access_time_rounded; color = Colors.orange; break;
+      case 'Leave': icon = Icons.event_note_rounded; color = Colors.teal; break;
+      case 'Employee Master': icon = Icons.badge_rounded; color = Colors.blue; break;
+      case 'Expense': icon = Icons.payments_rounded; color = Colors.purple; break;
+      default: icon = Icons.description_rounded; color = Colors.grey;
+    }
+
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
+      onTap: () => setState(() => _selectedReportType = type),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(12),
-          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          color: isSelected 
+              ? color.withOpacity(0.1) 
+              : (isDark ? const Color(0xFF1E1E1E) : Colors.white),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1)),
+            width: isSelected ? 2 : 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 16, color: Colors.blue),
-                const SizedBox(width: 8),
-                Text(
-                  DateFormat('dd MMM yyyy').format(date),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
+            Icon(icon, color: isSelected ? color : Colors.grey, size: 28),
+            const SizedBox(height: 12),
+            Text(
+              type,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 15,
+                color: isSelected ? (isDark ? Colors.white : color) : (isDark ? Colors.grey : Colors.black87),
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDateRow(String label, DateTime date, VoidCallback onTap, IconData icon, Color color, bool isDark) {
+    return InkWell(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                Text(
+                  DateFormat('dd MMMM, yyyy').format(date),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right, color: Colors.grey.shade400),
+        ],
       ),
     );
   }

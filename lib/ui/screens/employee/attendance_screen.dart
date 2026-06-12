@@ -330,56 +330,48 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
     final textColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                  const Text(
-                    'My Attendance',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Track your work hours and manage leave requests.',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Tabs
-            TabBar(
+      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FD),
+      appBar: AppBar(
+        backgroundColor: cardColor,
+        elevation: 0,
+        leading: widget.onNavigateToDashboard != null
+            ? IconButton(
+                icon: Icon(Icons.arrow_back, color: textColor),
+                onPressed: widget.onNavigateToDashboard,
+              )
+            : null,
+        title: Text(
+          'Attendance',
+          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            color: cardColor,
+            child: TabBar(
               controller: _tabController,
               labelColor: Colors.blue.shade700,
-              unselectedLabelColor: Colors.grey,
+              unselectedLabelColor: isDark ? Colors.grey.shade400 : Colors.grey.shade500,
               indicatorColor: Colors.blue.shade700,
-              indicatorWeight: 2,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
               tabs: const [
                 Tab(text: 'Check In/Out'),
                 Tab(text: 'My Calendar'),
                 Tab(text: 'My History'),
               ],
             ),
-
-            // Tab Content
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                  children: [
-                  _buildCheckInOutTab(context, attendanceProvider, todayAttendance, isCheckedIn, cardColor, textColor, isDark),
-                  _buildCalendarTab(context, history, cardColor, textColor, isDark),
-                  _buildHistoryTab(context, history, cardColor, textColor, isDark),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildCheckInOutTab(context, attendanceProvider, todayAttendance, isCheckedIn, cardColor, textColor, isDark),
+          _buildCalendarTab(context, history, cardColor, textColor, isDark),
+          _buildHistoryTab(context, history, cardColor, textColor, isDark),
+        ],
       ),
     );
   }
@@ -387,310 +379,507 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
   Widget _buildCheckInOutTab(BuildContext context, AttendanceProvider attendanceProvider, 
       Attendance? todayAttendance, bool isCheckedIn, Color cardColor, Color textColor, bool isDark) {
     final dayFormat = DateFormat('EEEE, MMMM d').format(_currentTime).toUpperCase();
-    final timeFormat = DateFormat('HH:mm:ss').format(_currentTime);
+    
+    // Get working duration for the clock
+    Duration workingDuration = Duration.zero;
+    if (todayAttendance != null && todayAttendance.checkInTime != null) {
+      final endTime = todayAttendance.checkOutTime ?? DateTime.now();
+      workingDuration = endTime.difference(todayAttendance.checkInTime!);
+    }
+    
+    // Format workingDuration as HH:mm:ss
+    String hours = workingDuration.inHours.toString().padLeft(2, '0');
+    String minutes = (workingDuration.inMinutes % 60).toString().padLeft(2, '0');
+    String seconds = (workingDuration.inSeconds % 60).toString().padLeft(2, '0');
+    final timeFormat = "$hours:$minutes:$seconds";
+    
+    // Calculate progress (8 hours baseline)
+    double progress = 0;
+    int workedMinutes = 0;
+    if (todayAttendance != null && todayAttendance.checkInTime != null) {
+      final endTime = todayAttendance.checkOutTime ?? DateTime.now();
+      workedMinutes = endTime.difference(todayAttendance.checkInTime!).inMinutes;
+      progress = (workedMinutes / (8 * 60)).clamp(0.0, 1.0);
+    }
+    final int percentage = (progress * 100).toInt();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          // Main Check In/Out Card
-          Card(
-            elevation: 0,
-            color: cardColor,
-            shape: RoundedRectangleBorder(
+          // Header Section: Date and Time
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: cardColor,
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.01),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                children: [
-                  // Date and Time Display
-                  Text(
-                    dayFormat,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                      letterSpacing: 0.5,
-                    ),
+            child: Column(
+              children: [
+                Text(
+                  dayFormat,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.grey.shade400 : const Color(0xFF666666),
+                    letterSpacing: 0.6,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    timeFormat,
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade700,
-                      fontFeatures: [const FontFeature.tabularFigures()],
-                    ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  timeFormat,
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.blue.shade700,
+                    letterSpacing: -1.2,
                   ),
-                  const SizedBox(height: 32),
-
-                  // Location Error Message
-                  if (_locationPermissionDenied) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade200),
+                ),
+                const SizedBox(height: 16),
+                
+                // Circular Progress Button Section
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Progress Arc
+                    SizedBox(
+                      width: 130,
+                      height: 130,
+                      child: CustomPaint(
+                        painter: ProgressArc(
+                          progress: progress,
+                          arcColor: Colors.blue.shade600,
+                          unfilledColor: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
+                        ),
                       ),
-                      child: Row(
+                    ),
+                    
+                    // Main Action Button
+                    InkWell(
+                      onTap: attendanceProvider.isLoading ? null : (isCheckedIn ? _handleCheckOut : _handleCheckIn),
+                      borderRadius: BorderRadius.circular(100),
+                      child: Container(
+                        width: 105,
+                        height: 105,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Colors.orange.shade400, Colors.orange.shade600],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.shade300.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isCheckedIn ? Icons.logout_rounded : Icons.login_rounded,
+                              size: 28,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isCheckedIn ? 'Check Out' : 'Check In',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              isCheckedIn ? 'End Day' : 'Start Day',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$percentage%',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$percentage% of today done',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Overtime Button Section
+          if (isCheckedIn && todayAttendance != null && todayAttendance.checkInTime != null) ...[
+            Builder(builder: (context) {
+              final workedHours = DateTime.now().difference(todayAttendance.checkInTime!).inHours;
+              final workedMins = DateTime.now().difference(todayAttendance.checkInTime!).inMinutes;
+              final hasCompleted8 = workedHours >= 8;
+              final isOT = attendanceProvider.isOvertimeActive;
+
+              if (hasCompleted8 && !isOT) {
+                // Show "Start Overtime" button
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Material(
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        attendanceProvider.activateOvertime();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Overtime activated! You can work for up to 4 more hours.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      },
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.shade500, Colors.deepOrange.shade400],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.more_time_rounded, color: Colors.white, size: 22),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Start Overtime',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '(max 4 hrs)',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.85),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              } else if (isOT) {
+                // Show "Overtime Active" indicator with remaining time
+                final maxEnd = todayAttendance.checkInTime!.add(const Duration(hours: 12));
+                final remainingMins = maxEnd.difference(DateTime.now()).inMinutes.clamp(0, 240);
+                final remainH = remainingMins ~/ 60;
+                final remainM = remainingMins % 60;
+
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.green.shade300, width: 1.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.timer_outlined, color: Colors.green.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Overtime Active',
+                        style: TextStyle(
+                          color: Colors.green.shade800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${remainH}h ${remainM}m left',
+                          style: TextStyle(
+                            color: Colors.green.shade900,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return const SizedBox.shrink();
+            }),
+          ],
+          
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Today's Summary",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Location Error',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red.shade700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Location permission denied. Please allow location access.',
-                                  style: TextStyle(
-                                    color: Colors.red.shade700,
-                                    fontSize: 11,
-                                  ),
-                                  softWrap: true,
-                                ),
-                              ],
-                            ),
+                          _buildSummaryItem(
+                            icon: Icons.check_circle_outline,
+                            label: 'Check in:',
+                            value: todayAttendance?.checkInTime != null 
+                                ? DateFormat('h:mm a').format(todayAttendance!.checkInTime!) 
+                                : '--:--',
+                            isDark: isDark,
+                          ),
+                          const SizedBox(height: 4),
+                          _buildSummaryItem(
+                            icon: Icons.task_alt,
+                            label: 'Status:',
+                            value: isCheckedIn ? 'On Time' : (todayAttendance?.checkOutTime != null ? 'Done' : 'N/A'),
+                            valueColor: isCheckedIn ? Colors.green.shade600 : (isDark ? Colors.grey.shade400 : Colors.grey),
+                            isDark: isDark,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSummaryItem(
+                            icon: Icons.access_time,
+                            label: 'Worked:',
+                            value: Helpers.formatDuration(Duration(minutes: workedMinutes)),
+                            isDark: isDark,
                           ),
                         ],
                       ),
                     ),
                   ],
-
-                  const SizedBox(height: 32),
-
-                  // Incomplete Checkout Warning
-                  if (attendanceProvider.incompleteCheckoutFromPreviousDay != null && !isCheckedIn) ...[
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 24),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Incomplete Checkout',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange.shade700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'You have an incomplete checkout from ${DateFormat('MMM dd, yyyy').format(attendanceProvider.incompleteCheckoutFromPreviousDay!.date)}. Please complete the checkout before checking in again.',
-                                      style: TextStyle(
-                                        color: Colors.orange.shade700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: attendanceProvider.isLoading ? null : () => _handleCheckOut(
-                                attendanceRecord: attendanceProvider.incompleteCheckoutFromPreviousDay,
-                              ),
-                              icon: const Icon(Icons.logout, size: 20),
-                              label: Text(
-                                'Check Out for ${DateFormat('MMM dd').format(attendanceProvider.incompleteCheckoutFromPreviousDay!.date)}',
-                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange.shade700,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  // Check In/Out Button
-                  if (todayAttendance?.checkOutTime != null)
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.green.shade700, size: 48),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Completed',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          if (todayAttendance!.checkInTime != null) ...[
-                            Text(
-                              'First Check In: ${DateFormat('HH:mm').format(todayAttendance.checkInTime!)}',
-                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                            ),
-                          ],
-                          if (todayAttendance.checkOutTime != null) ...[
-                            Text(
-                              'Last Check Out: ${DateFormat('HH:mm').format(todayAttendance.checkOutTime!)}',
-                              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
-                            ),
-                            const SizedBox(height: 4),
-                            Builder(builder: (context) {
-                              final duration = todayAttendance.checkOutTime!.difference(todayAttendance.checkInTime!);
-                              final hours = duration.inHours;
-                              final minutes = duration.inMinutes % 60;
-                              return Text(
-                                'Total Duration: ${hours}h ${minutes}m',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade800,
-                                  fontSize: 14,
-                                ),
-                              );
-                            }),
-                          ],
-                          const SizedBox(height: 20),
-                          const Divider(),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Need to work more?',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: attendanceProvider.isLoading ? null : _handleCheckIn,
-                              icon: const Icon(Icons.login, size: 18),
-                              label: const Text('RE-CHECK IN'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue.shade700,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else if (isCheckedIn)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 120,
-                      child: ElevatedButton(
-                        onPressed: attendanceProvider.isLoading ? null : _handleCheckOut,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          shape: const CircleBorder(),
-                          elevation: 4,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.logout, size: 32),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Check Out',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'End Day',
-                              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      height: 120,
-                      child: ElevatedButton(
-                        onPressed: (attendanceProvider.isLoading || attendanceProvider.incompleteCheckoutFromPreviousDay != null) 
-                            ? null 
-                            : _handleCheckIn,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: attendanceProvider.incompleteCheckoutFromPreviousDay != null
-                              ? Colors.grey.shade400
-                              : Colors.blue.shade700,
-                          foregroundColor: Colors.white,
-                          shape: const CircleBorder(),
-                          elevation: 4,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.location_on, size: 32),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Check In',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              attendanceProvider.incompleteCheckoutFromPreviousDay != null
-                                  ? 'Complete Previous Checkout First'
-                                  : 'Start Day',
-                              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Weekly Progress Section
+          Container(
+            padding: const EdgeInsets.all(20),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Weekly Progress",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 24),
+                _buildWeeklyBarChart(attendanceProvider.history, isDark),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildSummaryItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 16,
+            child: Icon(icon, size: 13, color: Colors.blue.shade600),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11, 
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade700, 
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: valueColor ?? (isDark ? Colors.white : const Color(0xFF333333)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyBarChart(List<Attendance> history, bool isDark) {
+    final List<String> weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    
+    // Extract hours worked for each day of the current week
+    final Map<int, double> dailyHours = {};
+    for (int i = 0; i < 7; i++) {
+        final day = DateTime(monday.year, monday.month, monday.day).add(Duration(days: i));
+        final attendance = history.firstWhere(
+            (a) => a.checkInTime != null && 
+                  a.checkInTime!.year == day.year && 
+                  a.checkInTime!.month == day.month && 
+                  a.checkInTime!.day == day.day,
+            orElse: () => Attendance(id: '', employeeId: '', date: day),
+        );
+        
+        double hours = 0;
+        if (attendance.checkInTime != null && attendance.checkOutTime != null) {
+            hours = attendance.checkOutTime!.difference(attendance.checkInTime!).inMinutes / 60.0;
+        } else if (attendance.checkInTime != null && day.day == now.day) {
+            hours = DateTime.now().difference(attendance.checkInTime!).inMinutes / 60.0;
+        }
+        dailyHours[i] = hours;
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(7, (index) {
+          final double hours = dailyHours[index] ?? 0;
+          final bool isToday = index == (now.weekday - 1);
+          final double barHeight = (hours / 12).clamp(0.0, 1.0) * 100 + 40; // Max 12 hours visual baseline
+          
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            child: Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: barHeight,
+                  decoration: BoxDecoration(
+                    color: isToday ? Colors.blue.shade400 : (isDark ? Colors.blue.shade900.withOpacity(0.2) : Colors.blue.shade100.withOpacity(0.5)),
+                    borderRadius: BorderRadius.circular(8),
+                    border: isToday ? Border.all(color: Colors.blue.shade700, width: 2) : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      "${hours.toStringAsFixed(1)}h",
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: isToday ? Colors.white : Colors.blue.shade800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  weekDays[index],
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isToday ? FontWeight.bold : FontWeight.w500,
+                    color: isToday ? Colors.blue.shade700 : Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
 
   Widget _buildCalendarTab(BuildContext context, List<Attendance> history, Color cardColor, Color textColor, bool isDark) {
     final attendanceProvider = context.watch<AttendanceProvider>();
@@ -773,7 +962,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                     Flexible(
                       child: Text(
                         DateFormat('MMMM yyyy').format(_selectedMonth),
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -872,7 +1061,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                             children: [
                               Text(
                                 'MONTHLY LEAVES',
-                                style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                                style: TextStyle(fontSize: 9, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                               ),
@@ -911,7 +1100,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                             children: [
                               Text(
                                 'WORK FROM HOME',
-                                style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                                style: TextStyle(fontSize: 9, color: isDark ? Colors.grey.shade400 : Colors.grey.shade600),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                               ),
@@ -944,18 +1133,18 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                const Text(
+                Text(
                     'LIVE LEGEND',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
                 ),
                 const SizedBox(height: 12),
-                  _buildLegendItem(Colors.green, 'ACTIVE IN-OFFICE'),
+                  _buildLegendItem(Colors.green, 'ACTIVE IN-OFFICE', isDark),
                   const SizedBox(height: 8),
-                  _buildLegendItem(Colors.orange, 'PLANNED LEAVE'),
+                  _buildLegendItem(Colors.orange, 'PLANNED LEAVE', isDark),
                   const SizedBox(height: 8),
-                  _buildLegendItem(Colors.purple, 'REMOTE WFH'),
+                  _buildLegendItem(Colors.purple, 'REMOTE WFH', isDark),
                   const SizedBox(height: 8),
-                  _buildLegendItem(Colors.amber, 'BORROWED DAY'),
+                  _buildLegendItem(Colors.amber, 'BORROWED DAY', isDark),
                 ],
               ),
             ),
@@ -1107,7 +1296,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                                     margin: const EdgeInsets.all(2),
                                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
                                     decoration: BoxDecoration(
-                                      color: isToday ? Colors.blue.shade100 : Colors.transparent,
+                                      color: isToday ? (isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade100) : Colors.transparent,
                                       borderRadius: BorderRadius.circular(8),
                                       border: isToday ? Border.all(color: Colors.blue.shade700, width: 2) : null,
                                     ),
@@ -1205,7 +1394,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
     );
   }
 
-  Widget _buildLegendItem(Color color, String label) {
+  Widget _buildLegendItem(Color color, String label, bool isDark) {
     return Row(
       children: [
         Container(
@@ -1219,7 +1408,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(fontSize: 11),
+          style: TextStyle(fontSize: 11, color: isDark ? Colors.grey.shade400 : Colors.black87),
         ),
       ],
     );
@@ -1244,9 +1433,9 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Text(
+          Text(
             'Attendance Log',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
           ),
           const SizedBox(height: 16),
 
@@ -1350,7 +1539,8 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
               
               // Check work_type from attendance record
               final workType = attendance.workType?.toLowerCase();
-              final isRemote = workType == 'remote' || workType == 'hybrid';
+              final isRemote = workType == 'remote';
+              final isHybrid = workType == 'hybrid';
               final isInOffice = workType == 'in office';
               final status = attendance.status ?? 
                             (attendance.checkOutTime != null ? 'Present' : 
@@ -1380,16 +1570,17 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                               children: [
                           Text(
                             DateFormat('MMM dd').format(checkInDate).toUpperCase(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
+                              color: textColor,
                             ),
                           ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
-                              color: status == 'Present' ? Colors.green.shade50 : Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(4),
+                                    color: status == 'Present' ? (isDark ? Colors.green.shade900.withOpacity(0.2) : Colors.green.shade50) : (isDark ? Colors.orange.shade900.withOpacity(0.2) : Colors.orange.shade50),
+                                    borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                               status,
@@ -1409,31 +1600,48 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.purple.shade50,
+                                    color: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'Remote',
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: Colors.purple.shade700,
+                                      color: isDark ? Colors.purple.shade300 : Colors.purple.shade700,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ),
-                              if (isInOffice) ...[
-                                if (isRemote) const SizedBox(width: 8),
+                              if (isHybrid) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
+                                    color: isDark ? Colors.indigo.shade900.withOpacity(0.3) : Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Hybrid',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isDark ? Colors.indigo.shade300 : Colors.indigo.shade700,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (isInOffice) ...[
+                                if (isRemote || isHybrid) const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50,
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
                                     'In Office',
                                     style: TextStyle(
                                       fontSize: 10,
-                                      color: Colors.green.shade700,
+                                      color: isDark ? Colors.green.shade300 : Colors.green.shade700,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -1941,4 +2149,56 @@ class _HolidayImageViewerState extends State<_HolidayImageViewer> {
       ),
      );
   }
+}
+
+class ProgressArc extends CustomPainter {
+  final double progress;
+  final Color arcColor;
+  final Color unfilledColor;
+
+  ProgressArc({
+    required this.progress,
+    required this.arcColor,
+    required this.unfilledColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final strokeWidth = 12.0;
+
+    final basePaint = Paint()
+      ..color = unfilledColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final progressPaint = Paint()
+      ..color = arcColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    // Draw background arc
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+      0.8 * 3.14159, // Start angle
+      1.4 * 3.14159, // Sweep angle
+      false,
+      basePaint,
+    );
+
+    // Draw progress arc
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius - strokeWidth / 2),
+      0.8 * 3.14159,
+      progress * 1.4 * 3.14159,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -16,7 +16,7 @@ import 'package:loghr_mobile/ui/screens/employee/policies_screen.dart';
 
 import 'package:loghr_mobile/ui/screens/employee/calendar_screen.dart';
 import 'package:loghr_mobile/ui/screens/employee/my_payroll_screen.dart';
-import 'package:loghr_mobile/ui/screens/employee/settings_screen.dart';
+import 'package:loghr_mobile/ui/screens/shared/settings_screen.dart';
 import 'package:loghr_mobile/logic/notification_provider.dart';
 
 

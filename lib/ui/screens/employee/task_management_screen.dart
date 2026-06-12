@@ -280,54 +280,55 @@ class _TaskManagementScreenState extends State<TaskManagementScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 45,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.search, color: Colors.grey.shade400, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (_) => setState(() {}), // Trigger rebuild on search
-                      decoration: const InputDecoration(
-                        hintText: 'Search tasks...',
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(fontSize: 14),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ],
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+              decoration: InputDecoration(
+                hintText: 'Search tasks...',
+                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+                filled: true,
+                fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.blue, width: 1.5),
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
           Container(
-            height: 45,
+            height: 46,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.withOpacity(0.2)),
             ),
-            child: DropdownButton<String>(
-              value: _selectedStatus,
-              underline: const SizedBox(),
-              icon: const Icon(Icons.keyboard_arrow_down, size: 20),
-              items: ['All Status', 'Completed', 'In Progress', 'To Do'].map((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value, style: const TextStyle(fontSize: 13)),
-                );
-              }).toList(),
-              onChanged: (val) => setState(() => _selectedStatus = val!),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedStatus,
+                icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+                dropdownColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+                items: ['All Status', 'Completed', 'In Progress', 'To Do'].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, style: const TextStyle(fontSize: 13)),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedStatus = val!),
+              ),
             ),
           ),
         ],

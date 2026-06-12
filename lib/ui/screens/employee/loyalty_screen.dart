@@ -40,6 +40,10 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FD);
+    final cardBg = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = isDark ? Colors.white : Colors.black;
+    final subTextColor = isDark ? Colors.grey[400]! : Colors.grey;
+    final borderColor = isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFEEEEEE);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -47,16 +51,16 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
         preferredSize: const Size.fromHeight(80),
         child: Container(
           padding: const EdgeInsets.only(top: 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+          decoration: BoxDecoration(
+            color: cardBg,
+            border: Border(bottom: BorderSide(color: borderColor)),
           ),
           child: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: cardBg,
             elevation: 0,
             leading: widget.onNavigateToDashboard != null
                 ? IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black),
+                    icon: Icon(Icons.arrow_back, color: textColor),
                     onPressed: widget.onNavigateToDashboard,
                   )
                 : null,
@@ -74,19 +78,19 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                       child: const Icon(Icons.stars, color: Colors.white, size: 16),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'Loyalty & Rewards',
                       style: TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 18,
-                        color: Colors.black,
+                        color: textColor,
                       ),
                     ),
                   ],
                 ),
-                const Text(
+                Text(
                   'Manage your earning potential and history',
-                  style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                  style: TextStyle(fontSize: 11, color: subTextColor, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -108,17 +112,17 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.stars_outlined, size: 64, color: Colors.grey.shade300),
+                    Icon(Icons.stars_outlined, size: 64, color: isDark ? Colors.grey[800] : Colors.grey.shade300),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       'No loyalty record found',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'We couldn\'t find or create your loyalty card. Please contact HR or try again later.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: subTextColor),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
@@ -156,12 +160,12 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'MEMBERSHIP CARD',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey,
+                              color: subTextColor,
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -171,12 +175,12 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                             onTap: () {},
                           ),
                           const SizedBox(height: 32),
-                          const Text(
+                          Text(
                             'PERFORMANCE METRICS',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey,
+                              color: subTextColor,
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -186,7 +190,8 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                             value: '#1',
                             icon: Icons.trending_up,
                             iconColor: Colors.teal,
-                            bgColor: const Color(0xFFE8F5E9),
+                            bgColor: isDark ? const Color(0xFF1B2E2A) : const Color(0xFFE8F5E9),
+                            isDark: isDark,
                           ),
                           const SizedBox(height: 14),
                           _buildMetricCard(
@@ -194,17 +199,18 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                             value: '${card.points}',
                             icon: Icons.history,
                             iconColor: Colors.blue.shade700,
-                            bgColor: const Color(0xFFE3F2FD),
+                            bgColor: isDark ? const Color(0xFF1A2633) : const Color(0xFFE3F2FD),
+                            isDark: isDark,
                           ),
                           const SizedBox(height: 32),
-                          _buildRedemptionNote(),
+                          _buildRedemptionNote(isDark),
                         ],
                       ),
                     ),
                   ),
                   
                   // Vertical Divider
-                  if (isWide) Container(width: 1, color: Colors.grey.shade100, height: double.infinity),
+                  if (isWide) Container(width: 1, color: borderColor, height: double.infinity),
                   
                   // Right Side: Tabs and Content
                   Expanded(
@@ -214,14 +220,14 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                       children: [
                         Padding(
                           padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                          child: _buildTabBar(),
+                          child: _buildTabBar(isDark),
                         ),
                         Expanded(
                           child: TabBarView(
                             controller: _tabController,
                             children: [
-                              _buildHowToEarnTab(),
-                              _buildActivityLogTab(provider.transactions),
+                              _buildHowToEarnTab(isDark),
+                              _buildActivityLogTab(provider.transactions, isDark),
                             ],
                           ),
                         ),
@@ -243,13 +249,13 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                            child: Column(
                              crossAxisAlignment: CrossAxisAlignment.start,
                              children: [
-                               const Text('MEMBERSHIP CARD', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                               Text('MEMBERSHIP CARD', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subTextColor)),
                                const SizedBox(height: 12),
                                LoyaltyCardWidget(card: card, onTap: () {}),
                                const SizedBox(height: 24),
-                               _buildMetricCard(label: 'ORG RANK', value: '#1', icon: Icons.trending_up, iconColor: Colors.teal, bgColor: const Color(0xFFE8F5E9)),
+                               _buildMetricCard(label: 'ORG RANK', value: '#1', icon: Icons.trending_up, iconColor: Colors.teal, bgColor: isDark ? const Color(0xFF1B2E2A) : const Color(0xFFE8F5E9), isDark: isDark),
                                const SizedBox(height: 12),
-                               _buildMetricCard(label: 'LIFETIME POINTS', value: '${card.points}', icon: Icons.history, iconColor: Colors.blue.shade700, bgColor: const Color(0xFFE3F2FD)),
+                               _buildMetricCard(label: 'LIFETIME POINTS', value: '${card.points}', icon: Icons.history, iconColor: Colors.blue.shade700, bgColor: isDark ? const Color(0xFF1A2633) : const Color(0xFFE3F2FD), isDark: isDark),
                              ],
                            ),
                          ),
@@ -257,7 +263,7 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                        SliverToBoxAdapter(
                          child: Padding(
                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                           child: _buildTabBar(),
+                           child: _buildTabBar(isDark),
                          ),
                        ),
                      ];
@@ -265,8 +271,8 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
                    body: TabBarView(
                      controller: _tabController,
                      children: [
-                       _buildHowToEarnTab(),
-                       _buildActivityLogTab(provider.transactions),
+                       _buildHowToEarnTab(isDark),
+                       _buildActivityLogTab(provider.transactions, isDark),
                      ],
                    ),
                  );
@@ -275,11 +281,11 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
               return Container(
                 margin: EdgeInsets.all(isWide ? 24 : 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cardBg,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
                       blurRadius: 20,
                       offset: const Offset(0, 4),
                     ),
@@ -304,13 +310,14 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
     required IconData icon,
     required Color iconColor,
     required Color bgColor,
+    required bool isDark,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF252525) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F0F0)),
       ),
       child: Row(
         children: [
@@ -328,11 +335,11 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFAAAAAA)),
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isDark ? Colors.grey[500] : const Color(0xFFAAAAAA)),
               ),
               Text(
                 value,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF222222)),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? Colors.white : const Color(0xFF222222)),
               ),
             ],
           ),
@@ -341,45 +348,45 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildRedemptionNote() {
+  Widget _buildRedemptionNote(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F9FF),
+        color: isDark ? const Color(0xFF1A2633) : const Color(0xFFF5F9FF),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE1EDFF)),
+        border: Border.all(color: isDark ? Colors.blue.withOpacity(0.2) : const Color(0xFFE1EDFF)),
       ),
       child: Text(
         '* Redeem points for bonuses, leave, or gift cards via the HR department.',
         style: TextStyle(
           fontSize: 11,
           fontStyle: FontStyle.italic,
-          color: Colors.blue.shade800,
+          color: isDark ? Colors.blue[300] : Colors.blue.shade800,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
   }
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(bool isDark) {
     return Container(
       height: 44,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F6F8),
+        color: isDark ? Colors.black.withOpacity(0.2) : const Color(0xFFF5F6F8),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF333333) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.05), blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
         labelColor: const Color(0xFF2E5BFF),
-        unselectedLabelColor: Colors.grey.shade500,
+        unselectedLabelColor: isDark ? Colors.grey[600] : Colors.grey.shade500,
         labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
         indicatorSize: TabBarIndicatorSize.tab,
         dividerColor: Colors.transparent,
@@ -391,13 +398,13 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
     );
   }
 
-  Widget _buildHowToEarnTab() {
+  Widget _buildHowToEarnTab(bool isDark) {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        const Text(
+        Text(
           'REWARDS DISTRIBUTION PLAN',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFAAAAAA), letterSpacing: 0.5),
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: isDark ? Colors.grey[500] : const Color(0xFFAAAAAA), letterSpacing: 0.5),
         ),
         const SizedBox(height: 24),
         _buildEarnItem(
@@ -405,18 +412,21 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
           iconColor: const Color(0xFF2E5BFF),
           title: 'Task Completion',
           points: '+20 PTS',
+          isDark: isDark,
         ),
         _buildEarnItem(
           icon: Icons.track_changes_outlined,
           iconColor: const Color(0xFF00C853),
           title: 'Objective Milestone',
           points: '+50 PTS',
+          isDark: isDark,
         ),
         _buildEarnItem(
           icon: Icons.timer_outlined,
           iconColor: const Color(0xFF7C4DFF),
           title: 'Attendance Perfection',
           points: '+10 PTS',
+          isDark: isDark,
         ),
       ],
     );
@@ -427,14 +437,15 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
     required Color iconColor,
     required String title,
     required String points,
+    required bool isDark,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF252525) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F0F0)),
       ),
       child: Row(
         children: [
@@ -450,7 +461,7 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Color(0xFF333333)),
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: isDark ? Colors.white : const Color(0xFF333333)),
             ),
           ),
           Container(
@@ -465,74 +476,74 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
             ),
           ),
           const SizedBox(width: 10),
-          Icon(Icons.chevron_right, color: Colors.grey.shade300, size: 18),
+          Icon(Icons.chevron_right, color: isDark ? Colors.grey[700] : Colors.grey.shade300, size: 18),
         ],
       ),
     );
   }
 
-  Widget _buildActivityLogTab(List<LoyaltyTransaction> transactions) {
+  Widget _buildActivityLogTab(List<LoyaltyTransaction> transactions, bool isDark) {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'STATEMENT OF POINTS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFFAAAAAA)),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: isDark ? Colors.grey[500] : const Color(0xFFAAAAAA)),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F6F8),
+                color: isDark ? Colors.black.withOpacity(0.2) : const Color(0xFFF5F6F8),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 '${transactions.length} ENTRIES',
-                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF666666)),
+                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: isDark ? Colors.grey[400] : const Color(0xFF666666)),
               ),
             ),
           ],
         ),
         const SizedBox(height: 24),
         if (transactions.isEmpty)
-          const Center(
+          Center(
             child: Padding(
-              padding: EdgeInsets.only(top: 60),
+              padding: const EdgeInsets.only(top: 60),
               child: Column(
                 children: [
-                  Icon(Icons.history_toggle_off, size: 40, color: Color(0xFFEEEEEE)),
-                  SizedBox(height: 12),
-                  Text('No transactions yet.', style: TextStyle(color: Color(0xFFCCCCCC), fontSize: 13, fontWeight: FontWeight.w500)),
+                   Icon(Icons.history_toggle_off, size: 40, color: isDark ? Colors.grey[800] : const Color(0xFFEEEEEE)),
+                  const SizedBox(height: 12),
+                  Text('No transactions yet.', style: TextStyle(color: isDark ? Colors.grey[700] : const Color(0xFFCCCCCC), fontSize: 13, fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
           )
         else
-          ...transactions.map((tx) => _buildTransactionItem(tx)),
+          ...transactions.map((tx) => _buildTransactionItem(tx, isDark)),
       ],
     );
   }
 
-  Widget _buildTransactionItem(LoyaltyTransaction tx) {
+  Widget _buildTransactionItem(LoyaltyTransaction tx, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF252525) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF0F0F0)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF0F0F0)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: const Color(0xFFF5F6F8),
+              color: isDark ? Colors.black.withOpacity(0.1) : const Color(0xFFF5F6F8),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.show_chart, color: Color(0xFFB0BEC5), size: 20),
+            child: Icon(Icons.show_chart, color: isDark ? Colors.grey[600] : const Color(0xFFB0BEC5), size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -541,14 +552,14 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
               children: [
                 Text(
                   tx.description ?? tx.type.replaceAll('_', ' ').toUpperCase(),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: Color(0xFF333333)),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: isDark ? Colors.white : const Color(0xFF333333)),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   DateFormat('dd MMM yyyy').format(tx.createdAt).toUpperCase(),
-                  style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 10, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: isDark ? Colors.grey[600] : const Color(0xFFAAAAAA), fontSize: 10, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -556,7 +567,7 @@ class _LoyaltyScreenState extends State<LoyaltyScreen> with SingleTickerProvider
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
+              color: isDark ? const Color(0xFF1B2E2A) : const Color(0xFFE8F5E9),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(

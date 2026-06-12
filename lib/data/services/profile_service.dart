@@ -113,7 +113,7 @@ class ProfileService {
     try {
       final data = await supabase
           .from('employees')
-          .select('id, full_name, name, first_name, last_name, employee_name, display_name, designation, position, job_title, title, designation_id, department_id, status, is_active, employee_code, email, company_email, work_email, official_email, phone, mobile, contact_number, work_phone, phone_number, date_of_joining, joining_date, doj, start_date')
+          .select('id, full_name, name, first_name, last_name, employee_name, display_name, designation, position, job_title, title, designation_id, department_id, status, is_active, employee_code, email, company_email, work_email, official_email, phone, mobile, contact_number, work_phone, phone_number, date_of_joining, joining_date, doj, start_date, pan, pan_number, aadhaar, aadhaar_number, uan, uan_number, bank_name, account_number, account_no, bank_account_no, bank_acc_no, ifsc_code, ifsc, bank_branch, branch_name, branch')
           .or('id.eq.$employeeId,employee_code.eq.$employeeId')
           .maybeSingle();
       return data;
@@ -298,29 +298,42 @@ class ProfileService {
       // First, try to find through views (like website might use)
       final viewData = await _tryProfileViewApproach(userId);
       if (viewData != null) {
-        print('ProfileService: ✅ Using data from view');
-        return viewData;
+        print('ProfileService: ✅ Found data in view');
       }
       
-      // Fallback: fetch from user_profiles table
+      // Fetch from user_profiles table
       final data = await supabase
           .from('user_profiles')
           .select()
           .eq('user_id', userId)
           .maybeSingle();
       
+      if (data == null && viewData == null) {
+        print('ProfileService: ❌ No profile found in user_profiles or views');
+        return null;
+      }
+
+      // Base data is from user_profiles if found, otherwise from view
+      final profileBase = data ?? Map<String, dynamic>.from(viewData!);
+      
       if (data != null) {
-        data['avatar_url'] = _resolveAvatarUrl(data['avatar_url'] as String?);
-        
+        profileBase['avatar_url'] = _resolveAvatarUrl(profileBase['avatar_url'] as String?);
         print('ProfileService: ✅ Profile data fetched from user_profiles');
-        print('ProfileService: 📋 user_profiles data - full_name: ${data['full_name']}, employee_id: ${data['employee_id']}');
-        print('ProfileService: 📋 user_profiles keys: ${data.keys.toList()}');
         
-        // Fetch employee default details from employees table
-        final employeeId = data['employee_id'] as String?;
-        
-        // Some schemas might have user_id in employees table
-        Map<String, dynamic>? employeeData;
+        // Merge viewData into profileBase for fields that might be missing in user_profiles
+        if (viewData != null) {
+          viewData.forEach((key, value) {
+            if (value != null && (profileBase[key] == null || (profileBase[key] is String && (profileBase[key] as String).isEmpty))) {
+              profileBase[key] = value;
+            }
+          });
+        }
+      }
+      
+      final employeeId = profileBase['employee_id'] as String?;
+      
+      // Some schemas might have user_id in employees table
+      Map<String, dynamic>? employeeData;
         
         try {
           // FIRST PRIORITY: Try to find employee by user_id (if employees table has user_id column)
@@ -341,7 +354,7 @@ class ProfileService {
               try {
                 employeeByUserId = await supabase
                     .from('employees')
-                    .select('id, full_name, name, first_name, employee_name, designation, position, job_title, title, designation_id, department_id, status, is_active, employee_code, email, company_email, work_email, official_email, phone, mobile, contact_number, work_phone, phone_number, date_of_joining, joining_date, doj, start_date, user_id')
+                    .select('id, full_name, name, first_name, employee_name, designation, position, job_title, title, designation_id, department_id, status, is_active, employee_code, email, company_email, work_email, official_email, phone, mobile, contact_number, work_phone, phone_number, date_of_joining, joining_date, doj, start_date, user_id, pan, pan_number, aadhaar, aadhaar_number, uan, uan_number, bank_name, account_number, account_no, bank_account_no, bank_acc_no, ifsc_code, ifsc, bank_branch, branch_name, branch')
                     .eq('user_id', userId)
                     .maybeSingle();
               } catch (e2) {
@@ -407,14 +420,14 @@ class ProfileService {
               print('ProfileService: 📋 employees company_email: ${employeeData['company_email']}');
               print('ProfileService: 📋 employees phone: ${employeeData['phone']}');
               print('ProfileService: 📋 employees mobile: ${employeeData['mobile']}');
-              print('ProfileService: 📋 user_profiles email: ${data['email']}');
-              print('ProfileService: 📋 user_profiles phone: ${data['phone']}');
-              print('ProfileService: 📋 user_profiles mobile: ${data['mobile']}');
-              print('ProfileService: 📋 user_profiles date_of_joining: ${data['date_of_joining']}');
+              print('ProfileService: 📋 base email: ${profileBase['email']}');
+              print('ProfileService: 📋 base phone: ${profileBase['phone']}');
+              print('ProfileService: 📋 base mobile: ${profileBase['mobile']}');
+              print('ProfileService: 📋 base date_of_joining: ${profileBase['date_of_joining']}');
               
-              // Merge employee data into profile data, prioritizing user_profiles for existing fields
-              // but adding employee table fields that might not exist in user_profiles
-              final mergedData = Map<String, dynamic>.from(data);
+              // Merge employee data into profile data, prioritizing base for existing fields
+              // but adding employee table fields that might not exist in base
+              final mergedData = Map<String, dynamic>.from(profileBase);
               
               // Merge employee data, only for fields that don't exist in user_profiles or are null
               // BUT always prioritize certain fields from employees table (department, designation, etc.)
@@ -424,6 +437,10 @@ class ProfileService {
                 'date_of_joining', 'joining_date', 'doj', 'start_date', // Date of joining from employees
                 'email', 'company_email', 'work_email', // Contact info from employees
                 'phone', 'mobile', 'contact_number', 'work_phone', // Phone from employees
+                'pan', 'pan_number', 'aadhaar', 'aadhaar_number', 'uan', 'uan_number', // IDs from employees
+                'bank_name', 'account_number', 'account_no', 'bank_account_no', 'bank_acc_no', 'bank_account_number', 
+                'ifsc_code', 'ifsc', 'bank_branch', 'branch_name', 'branch', // Bank from employees
+                'highest_qualification', 'university', 'specialization', 'year_of_completion', // Education
               ];
               
               employeeData.forEach((key, value) {
@@ -526,7 +543,7 @@ class ProfileService {
               if (empName != null && empName.isNotEmpty && empName.trim().isNotEmpty) {
                 final trimmedName = empName.trim();
                 print('ProfileService: ✅✅✅ SUCCESS: Using employee name from employees table: "$trimmedName" ✅✅✅');
-                print('ProfileService: 📋 (Previous name in user_profiles was: ${data['full_name']})');
+                print('ProfileService: 📋 (Previous name was: ${profileBase['full_name']})');
                 mergedData['full_name'] = trimmedName;
               }
               
@@ -657,10 +674,10 @@ class ProfileService {
                 mergedData['designation'] = designation.trim();
                 mergedData['position'] = designation.trim(); // Also set position for compatibility
                 print('ProfileService: ✅✅✅ Using designation from employees/designations table: "${designation.trim()}" ✅✅✅');
-                print('ProfileService: 📋 Previous designation in user_profiles was: ${data['designation']}');
+                print('ProfileService: 📋 Previous designation was: ${profileBase['designation']}');
               } else {
                 print('ProfileService: ⚠️⚠️⚠️ WARNING: No designation found in employees or designations table! ⚠️⚠️⚠️');
-                print('ProfileService: ⚠️ Current designation in user_profiles: ${data['designation']}');
+                print('ProfileService: ⚠️ Current designation: ${profileBase['designation']}');
                 print('ProfileService: 💡 This might indicate:');
                 print('ProfileService:     1. The employee record in employees table is missing designation');
                 print('ProfileService:     2. The designation field uses a different column name');
@@ -700,10 +717,10 @@ class ProfileService {
                 mergedData['date_of_joining'] = dateOfJoining;
                 mergedData['joining_date'] = dateOfJoining; // Also set for compatibility
                 print('ProfileService: ✅✅✅ Using date_of_joining from employees table: "$dateOfJoining" ✅✅✅');
-                print('ProfileService: 📋 Previous date_of_joining in user_profiles was: ${data['date_of_joining']}');
+                print('ProfileService: 📋 Previous date_of_joining was: ${profileBase['date_of_joining']}');
               } else {
                 print('ProfileService: ⚠️⚠️⚠️ WARNING: No date_of_joining found in employees table! ⚠️⚠️⚠️');
-                print('ProfileService: ⚠️ Current date_of_joining in user_profiles: ${data['date_of_joining']}');
+                print('ProfileService: ⚠️ Current date_of_joining: ${profileBase['date_of_joining']}');
                 print('ProfileService: 💡 This might indicate:');
                 print('ProfileService:     1. The employee record in employees table is missing date_of_joining');
                 print('ProfileService:     2. The date_of_joining field uses a different column name');
@@ -722,20 +739,13 @@ class ProfileService {
           // Continue with user_profiles data only if employee fetch fails
         }
         
-        if (employeeId == null || employeeId.isEmpty) {
-          print('ProfileService: ⚠️ No employee_id found in user_profiles');
-        }
-      } else {
-        print('ProfileService: ❌ No profile data found for user_id: $userId');
+        return profileBase;
+      } catch (e, stackTrace) {
+        print('ProfileService: ❌ Error fetching user profile: $e');
+        print('ProfileService: Stack trace: $stackTrace');
+        return null;
       }
-      
-      return data;
-    } catch (e, stackTrace) {
-      print('ProfileService: ❌ Error fetching user profile: $e');
-      print('ProfileService: Stack trace: $stackTrace');
-      return null;
     }
-  }
 
   // Fetch organization details
   Future<Map<String, dynamic>?> getOrganization(String organizationId) async {
@@ -1133,6 +1143,26 @@ class ProfileService {
       print('ProfileService: Updating profile for user_id: $userId');
       print('ProfileService: Updates: $updates');
       
+      final fieldMapping = {
+        'full_name': ['full_name', 'name', 'employee_name'],
+        'email': ['email', 'company_email', 'work_email'],
+        'phone': ['phone', 'mobile', 'contact_number'],
+        'mobile': ['mobile', 'phone'],
+        'designation': ['designation', 'position', 'job_title'],
+        'avatar_url': ['avatar_url', 'profile_picture', 'image_url'],
+        'pan': ['pan', 'pan_number'],
+        'aadhaar': ['aadhaar', 'aadhaar_number'],
+        'uan': ['uan', 'uan_number'],
+        'bank_name': ['bank_name'],
+        'account_number': ['account_number', 'account_no', 'bank_account_no', 'bank_acc_no', 'bank_account_number'],
+        'ifsc_code': ['ifsc_code', 'ifsc'],
+        'bank_branch': ['bank_branch', 'branch_name', 'branch'],
+        'highest_qualification': ['highest_qualification', 'qualification', 'education', 'degree'],
+        'university': ['university', 'institution', 'college', 'school', 'university_name'],
+        'specialization': ['specialization', 'field', 'stream', 'field_of_study'],
+        'year_of_completion': ['year_of_completion', 'completion_year', 'pass_out_year', 'graduation_year'],
+      };
+
       // 1. Update user_profiles table
       bool userProfileUpdated = false;
       try {
@@ -1154,9 +1184,16 @@ class ProfileService {
         if (existingProfile != null) {
           final existingKeys = existingProfile.keys.toSet();
           updates.forEach((key, value) {
-            // Always allow updated_at
+            // Check if key exists directly or through mapping
             if (key == 'updated_at' || existingKeys.contains(key)) {
               filteredUpdates[key] = value;
+            } else if (fieldMapping.containsKey(key)) {
+              for (final mapKey in fieldMapping[key]!) {
+                if (existingKeys.contains(mapKey)) {
+                  filteredUpdates[mapKey] = value;
+                  break; // Use the first matching key
+                }
+              }
             } else {
               print('ProfileService: Skipping field "$key" for user_profiles - column does not exist');
             }
@@ -1172,12 +1209,14 @@ class ProfileService {
               .eq('user_id', userId)
               .select();
           userProfileUpdated = response.isNotEmpty;
+          print('ProfileService: user_profiles update successful: $userProfileUpdated');
         }
       } catch (e) {
         print('ProfileService: Error updating user_profiles: $e');
       }
 
       // 2. Synchronize with employees table if applicable
+      bool employeesUpdated = false;
       try {
         // Find the linked employee record
         final profile = await supabase
@@ -1192,14 +1231,6 @@ class ProfileService {
           
           // Map user_profiles fields to employees fields if they differ
           final employeeUpdates = <String, dynamic>{};
-          final fieldMapping = {
-            'full_name': ['full_name', 'name', 'employee_name'],
-            'email': ['email', 'company_email', 'work_email'],
-            'phone': ['phone', 'mobile', 'contact_number'],
-            'mobile': ['mobile', 'phone'],
-            'designation': ['designation', 'position', 'job_title'],
-            'avatar_url': ['avatar_url', 'profile_picture', 'image_url'],
-          };
 
           // Check which columns exist in employees table
           final existingEmployee = await supabase.from('employees').select().eq('id', employeeId).maybeSingle();
@@ -1219,17 +1250,18 @@ class ProfileService {
             });
 
             if (employeeUpdates.isNotEmpty) {
-              await supabase.from('employees').update(employeeUpdates).eq('id', employeeId);
+              final response = await supabase.from('employees').update(employeeUpdates).eq('id', employeeId).select();
+              employeesUpdated = response.isNotEmpty;
               print('ProfileService: Successfully synchronized keys to employees: ${employeeUpdates.keys.toList()}');
             }
           }
         }
       } catch (e) {
         print('ProfileService: Warning - Sync with employees table failed: $e');
-        // We don't return false here as user_profiles might have succeeded
       }
       
-      return userProfileUpdated;
+      // Return true if either update succeeded
+      return userProfileUpdated || employeesUpdated;
     } catch (e) {
       print('ProfileService: Critical error updating profile: $e');
       return false;

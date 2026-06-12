@@ -28,13 +28,13 @@ class LoanProvider extends ChangeNotifier {
     return _repository.getMaxLoanAmount(months, grossSalary);
   }
 
-  Future<void> checkEligibility(String userId) async {
+  Future<void> checkEligibility(String userId, {Map<String, dynamic>? userProfile}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _eligibility = await _repository.getEmployeeEligibility(userId);
+      _eligibility = await _repository.getEmployeeEligibility(userId, userProfile: userProfile);
       if (_eligibility != null && _eligibility!['isEligible'] == true) {
         // Calculate max loan amount
         final months = _eligibility!['monthsWorked'] ?? 0;

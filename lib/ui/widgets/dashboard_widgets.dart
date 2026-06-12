@@ -245,10 +245,10 @@ class PayrollSummarySection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: TextStyle(color: accColor.withOpacity(0.8), fontSize: 11, fontWeight: FontWeight.w600)),
+          Flexible(child: Text(label, style: TextStyle(color: accColor.withOpacity(0.8), fontSize: 11, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis, maxLines: 1)),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: accColor, fontSize: 18, fontWeight: FontWeight.bold)),
-          Text(subLabel, style: TextStyle(color: accColor.withOpacity(0.8), fontSize: 11)),
+          FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: TextStyle(color: accColor, fontSize: 18, fontWeight: FontWeight.bold))),
+          Flexible(child: Text(subLabel, style: TextStyle(color: accColor.withOpacity(0.8), fontSize: 11), overflow: TextOverflow.ellipsis, maxLines: 1)),
         ],
       ),
     );
@@ -278,27 +278,32 @@ class DashboardListTile extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: dotColor,
-                  shape: BoxShape.circle,
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: dotColor,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  if (subtitle != null)
-                    Text(subtitle!, style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 11)),
-                ],
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1),
+                      if (subtitle != null)
+                        Text(subtitle!, style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontSize: 11), overflow: TextOverflow.ellipsis, maxLines: 1),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Text(trailing, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
