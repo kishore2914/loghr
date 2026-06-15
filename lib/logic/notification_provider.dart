@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:loghr_mobile/data/services/notification_service.dart';
 import 'package:loghr_mobile/data/models/notification.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 
 class NotificationProvider extends ChangeNotifier {
   final NotificationService _service;
@@ -137,108 +136,50 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<void> _loadBrandingAndEmployeeId(String userId) async {
     try {
-      print('NotificationProvider: 🔍 Loading profile for $userId');
-      
-      // 1. Try user_profiles first
-      var userProfile = await supabase
-          .from('user_profiles')
-          .select('organization_id, employee_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      
-      String? orgId = userProfile?['organization_id'] as String?;
-      String? employeeId = userProfile?['employee_id'] as String?;
-
-      // 2. Fallback to employees table if organization_id is missing
-      if (orgId == null) {
-        print('NotificationProvider: 🔍 organization_id missing in user_profiles, trying employees table...');
-        final employeeProfile = await supabase
-            .from('employees')
-            .select('organization_id, id')
-            .or('user_id.eq.$userId,id.eq.$userId')
-            .maybeSingle();
+      print('NotificationProvider: 🔍 Loading profile for branding');
+      final profile = await api.get('/profile');
+      if (profile != null) {
+        _organizationName = profile['organization_name'] as String?;
+        final logoUrl = profile['organization_logo'] as String?;
+        final employeeId = profile['employee_id'] as String?;
+        final orgId = profile['organization_id'] as String?;
         
-        orgId = employeeProfile?['organization_id'] as String?;
-        employeeId ??= employeeProfile?['id'] as String?;
-      }
-
-      print('NotificationProvider: 📍 Found orgId: $orgId, employeeId: $employeeId');
-
-      // Update ID-based Listeners if we found a valid ID
-      final effectiveTaskId = employeeId ?? userId;
-      
-      _taskChannel?.unsubscribe();
-      _taskChannel = _service.subscribeToTasks(effectiveTaskId, _onNewTask);
-
-      if (employeeId != null) {
-        _leaveChannel?.unsubscribe();
-        _leaveChannel = _service.subscribeToLeaveUpdates(employeeId, _onLeaveUpdate);
-
-        _payslipChannel?.unsubscribe();
-        _payslipChannel = _service.subscribeToPayslips(employeeId, _onPayslipGenerated);
-
-        _expenseChannel?.unsubscribe();
-        _expenseChannel = _service.subscribeToExpenseUpdates(employeeId, _onExpenseUpdate);
-
-        _chargeChannel?.unsubscribe();
-        _chargeChannel = _service.subscribeToCharges(employeeId, _onNewCharge);
-      }
-
-      // 3. Fetch Organization Branding & Org-wide listeners
-      if (orgId != null) {
-        _announcementChannel?.unsubscribe();
-        _announcementChannel = _service.subscribeToAnnouncements(orgId, _onNewAnnouncement);
-
-        _policyChannel?.unsubscribe();
-        _policyChannel = _service.subscribeToPolicies(orgId, _onNewPolicy);
-
-        final orgQuery = await supabase
-            .from('organizations')
-            .select()
-            .eq('id', orgId)
-            .maybeSingle();
+        print('NotificationProvider: 🏢 Organization Name: $_organizationName');
         
-        if (orgQuery != null) {
-          _organizationName = orgQuery['name'] as String? ?? 
-                             orgQuery['company_name'] as String? ?? 
-                             orgQuery['organization_name'] as String?;
-          
-          print('NotificationProvider: 🏢 Organization Name: $_organizationName');
-          
-          final logoUrl = orgQuery['logo_url'] as String? ?? orgQuery['company_logo'] as String?;
-          
-          if (logoUrl != null && logoUrl.isNotEmpty) {
-            String? fullLogoUrl;
-            if (logoUrl.startsWith('http')) {
-              fullLogoUrl = logoUrl;
-            } else {
-              // Robust bucket check (matching profile_service logic)
-              final buckets = ['organizations', 'company-logos', 'logos', 'public'];
-              final cleanPath = logoUrl.startsWith('/') ? logoUrl.substring(1) : logoUrl;
-              
-              for (final bucket in buckets) {
-                try {
-                  fullLogoUrl = supabase.storage.from(bucket).getPublicUrl(cleanPath);
-                  // We don't check if it exists here to avoid network lag, 
-                  // but we take the first guess from 'organizations' as primary.
-                  if (bucket == 'organizations') break; 
-                } catch (_) {}
-              }
-            }
-            
-            if (fullLogoUrl != null) {
-              print('NotificationProvider: 🖼️ Downloading logo from $fullLogoUrl');
-              _logoLocalPath = await _service.downloadLogo(fullLogoUrl);
-              print('NotificationProvider: 📁 Logo saved at: $_logoLocalPath');
-            }
-          }
-        } else {
-          print('NotificationProvider: ⚠️ Organization record not found for ID: $orgId');
+        // Update ID-based Listeners if we found a valid ID
+        final effectiveTaskId = employeeId ?? userId;
+        
+        _taskChannel?.unsubscribe();
+        _taskChannel = _service.subscribeToTasks(effectiveTaskId, _onNewTask);
+
+        if (employeeId != null) {
+          _leaveChannel?.unsubscribe();
+          _leaveChannel = _service.subscribeToLeaveUpdates(employeeId, _onLeaveUpdate);
+
+          _payslipChannel?.unsubscribe();
+          _payslipChannel = _service.subscribeToPayslips(employeeId, _onPayslipGenerated);
+
+          _expenseChannel?.unsubscribe();
+          _expenseChannel = _service.subscribeToExpenseUpdates(employeeId, _onExpenseUpdate);
+
+          _chargeChannel?.unsubscribe();
+          _chargeChannel = _service.subscribeToCharges(employeeId, _onNewCharge);
         }
-      } else {
-        print('NotificationProvider: ⚠️ No organization ID found for user: $userId');
+
+        if (orgId != null) {
+          _announcementChannel?.unsubscribe();
+          _announcementChannel = _service.subscribeToAnnouncements(orgId, _onNewAnnouncement);
+
+          _policyChannel?.unsubscribe();
+          _policyChannel = _service.subscribeToPolicies(orgId, _onNewPolicy);
+        }
+        
+        if (logoUrl != null && logoUrl.isNotEmpty) {
+          print('NotificationProvider: 🖼️ Downloading logo from $logoUrl');
+          _logoLocalPath = await _service.downloadLogo(logoUrl);
+          print('NotificationProvider: 📁 Logo saved at: $_logoLocalPath');
+        }
       }
-      
       notifyListeners();
     } catch (e) {
       print('NotificationProvider: ❌ Error loading profile/branding: $e');

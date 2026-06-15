@@ -35,14 +35,16 @@ import 'package:loghr_mobile/ui/screens/auth/login_screen.dart';
 import 'package:loghr_mobile/ui/screens/employee/employee_main_screen.dart';
 import 'package:loghr_mobile/ui/screens/admin/admin_main_screen.dart';
 import 'package:loghr_mobile/ui/screens/employee/payslip_screen.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
+import 'package:loghr_mobile/config/api_client.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:loghr_mobile/ui/screens/error_app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    await SupabaseConfig.initialize();
+    await dotenv.load(fileName: '.env');
+    await api.initialize();
     
     // Initialize Notification Service
     final notificationService = NotificationService();

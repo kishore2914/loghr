@@ -3,8 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:loghr_mobile/logic/theme_provider.dart';
 import 'package:loghr_mobile/logic/auth_provider.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 
 class SettingsScreen extends StatelessWidget {
   final VoidCallback? onNavigateToDashboard;
@@ -371,9 +370,9 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     setState(() => _isChangingPassword = true);
 
     try {
-      await supabase.auth.updateUser(
-        UserAttributes(password: _newPasswordController.text),
-      );
+      await api.post('/auth/change-password', {
+        'newPassword': _newPasswordController.text,
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

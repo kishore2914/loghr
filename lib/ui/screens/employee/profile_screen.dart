@@ -10,7 +10,6 @@ import 'package:loghr_mobile/data/services/profile_service.dart';
 import 'package:loghr_mobile/ui/screens/shared/settings_screen.dart';
 import 'package:loghr_mobile/ui/screens/employee/payslip_detail_screen.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 

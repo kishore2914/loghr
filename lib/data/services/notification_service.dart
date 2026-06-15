@@ -1,8 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import 'package:loghr_mobile/config/supabase_config.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 import 'package:loghr_mobile/data/models/notification.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -36,13 +35,11 @@ class NotificationService {
       const InitializationSettings initializationSettings = InitializationSettings(
         android: initializationSettingsAndroid,
         iOS: initializationSettingsIOS,
-        // Add basic support for other platforms if needed by the plugin version
         macOS: initializationSettingsIOS, 
       );
 
       await _notificationsPlugin.initialize(initializationSettings);
       
-      // Request permissions for Android 13+
       if (Platform.isAndroid) {
         await _notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
@@ -80,11 +77,11 @@ class NotificationService {
     try {
       AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'loghr_urgent_channel_v3', // Forced new channel for OS reset
+      'loghr_urgent_channel_v3',
       'Urgent Alerts',
       channelDescription: 'High priority notifications for assigned tasks',
       importance: Importance.max,
-      priority: Priority.max, // Increased to Max
+      priority: Priority.max,
       showWhen: true,
       subText: organizationName,
       ticker: 'Task Alert',
@@ -123,8 +120,9 @@ class NotificationService {
   Future<String?> downloadLogo(String logoUrl) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final fileName = 'org_logo_${logoUrl.hashCode}${p.extension(logoUrl).isEmpty ? ".png" : p.extension(logoUrl)}';
-      final filePath = p.join(directory.path, fileName);
+      // Simple path construction
+      final fileName = 'org_logo_${logoUrl.hashCode}.png';
+      final filePath = '${directory.path}/$fileName';
       
       final file = File(filePath);
       if (await file.exists()) {
@@ -154,7 +152,7 @@ class NotificationService {
         tz.TZDateTime.from(completionTime, tz.local),
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'loghr_general_channel', // Consistent channel ID
+            'loghr_general_channel',
             'LogHR Notifications',
             channelDescription: 'Notifications for attendance and general updates',
             importance: Importance.high,
@@ -199,70 +197,22 @@ class NotificationService {
     }
   }
 
-  /// Inserts a notification into the Supabase `notifications` table for every
-  /// admin in the employee's organization, alerting them that the employee was
-  /// auto-checked out after 12 hours.
   Future<void> createAutoCheckoutAdminNotification({
     required String employeeId,
     required String employeeName,
   }) async {
-    try {
-      // 1. Get the employee's organization_id
-      final empData = await supabase
-          .from('employees')
-          .select('organization_id')
-          .eq('id', employeeId)
-          .maybeSingle();
-
-      final organizationId = empData?['organization_id'] as String?;
-      if (organizationId == null) {
-        print('NotificationService: No organization_id found for employee $employeeId');
-        return;
-      }
-
-      // 2. Find all admin users in the same organization
-      final adminProfiles = await supabase
-          .from('user_profiles')
-          .select('user_id, role')
-          .eq('organization_id', organizationId)
-          .inFilter('role', ['admin', 'super_admin', 'hr_manager', 'manager']);
-
-      if (adminProfiles == null || (adminProfiles as List).isEmpty) {
-        print('NotificationService: No admin users found for org $organizationId');
-        return;
-      }
-
-      // 3. Insert a notification for each admin
-      final now = DateTime.now().toUtc().toIso8601String();
-      final notifications = (adminProfiles as List).map((admin) => {
-        'user_id': admin['user_id'] as String,
-        'title': 'Auto-Checkout Alert',
-        'message': '$employeeName was automatically checked out after 12 hours (forgot to check out)',
-        'type': 'auto_checkout',
-        'related_id': employeeId,
-        'is_read': false,
-        'created_at': now,
-      }).toList();
-
-      await supabase.from('notifications').insert(notifications);
-
-      print('NotificationService: Sent auto-checkout admin notifications to ${notifications.length} admin(s)');
-    } catch (e) {
-      print('NotificationService: Error creating admin auto-checkout notification: $e');
-    }
+    // Stubbed since client handles auto checkout trigger locally
+    print('NotificationService: createAutoCheckoutAdminNotification stubbed');
   }
 
-  // --- Database Notifications (Supabase) ---
+  // --- Database Notifications ---
 
   Future<List<AppNotification>> getNotifications(String userId) async {
     try {
-      final response = await supabase
-          .from('notifications')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
-      
-      return (response as List).map((n) => AppNotification.fromJson(n)).toList();
+      final response = await api.get('/misc/notifications');
+      if (response == null) return [];
+      final list = response as List;
+      return list.map((n) => AppNotification.fromJson(n)).toList();
     } catch (e) {
       print('Error fetching notifications: $e');
       return [];
@@ -271,10 +221,7 @@ class NotificationService {
 
   Future<void> markAsRead(String notificationId) async {
     try {
-      await supabase
-          .from('notifications')
-          .update({'is_read': true})
-          .eq('id', notificationId);
+      await api.post('/misc/notifications/mark-read', {'id': notificationId});
     } catch (e) {
       print('Error marking notification as read: $e');
     }
@@ -282,10 +229,7 @@ class NotificationService {
 
   Future<void> markAllAsRead(String userId) async {
     try {
-      await supabase
-          .from('notifications')
-          .update({'is_read': true})
-          .eq('user_id', userId);
+      await api.post('/misc/notifications/mark-all-read', {});
     } catch (e) {
       print('Error marking all notifications as read: $e');
     }
@@ -293,201 +237,59 @@ class NotificationService {
 
   Future<void> deleteNotification(String notificationId) async {
     try {
-      await supabase
-          .from('notifications')
-          .delete()
-          .eq('id', notificationId);
+      await api.delete('/misc/notifications/$notificationId');
     } catch (e) {
       print('Error deleting notification: $e');
     }
   }
 
-  // --- Realtime Subscriptions ---
+  // --- Realtime Subscriptions (Mocked) ---
 
   RealtimeChannel subscribeToNotifications(
       String userId, Function(AppNotification) onNewNotification) {
-    print('NotificationService: Subscribing to notifications channel for user: $userId');
-    
-    // Using a more generalized channel name to avoid subscription limits/crashes
-    final channel = supabase
-        .channel('user-$userId-notifications')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          callback: (payload) {
-            print('NotificationService: [REALTIME] Notification row received: ${payload.newRecord}');
-            // Client-side filtering is more robust if server side has issues
-            if (payload.newRecord['user_id'] == userId) {
-              try {
-                final newNotification = AppNotification.fromJson(payload.newRecord);
-                onNewNotification(newNotification);
-              } catch (e) {
-                print('Error parsing realtime notification: $e');
-              }
-            }
-          },
-        )
-        .subscribe();
-        
-    return channel;
+    print('NotificationService: Subscribing mock notifications for user: $userId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToTasks(
       String employeeId, Function(Map<String, dynamic>) onNewTask) {
-    print('NotificationService: Subscribing to tasks channel for employee: $employeeId');
-    
-    final channel = supabase.channel('employee-$employeeId-tasks')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'tasks',
-          callback: (payload) {
-            print('NotificationService: [REALTIME] Task row received: ${payload.newRecord}');
-            final assignedTo = payload.newRecord['assigned_to']?.toString();
-            final assigneeId = payload.newRecord['assignee_id']?.toString();
-            
-            if (assignedTo == employeeId || assigneeId == employeeId) {
-              onNewTask(payload.newRecord);
-            }
-          },
-        )
-        .subscribe();
-        
-    return channel;
+    print('NotificationService: Subscribing mock tasks for employee: $employeeId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToLeaveUpdates(
       String employeeId, Function(Map<String, dynamic>) onLeaveUpdate) {
-    print('NotificationService: Subscribing to leave updates for employee: $employeeId');
-    
-    return supabase.channel('employee-$employeeId-leaves')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'leave_applications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'employee_id',
-            value: employeeId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] Leave update received: ${payload.newRecord}');
-            onLeaveUpdate(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock leaves for employee: $employeeId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToAnnouncements(
       String organizationId, Function(Map<String, dynamic>) onAnnouncement) {
-    print('NotificationService: Subscribing to announcements for org: $organizationId');
-    
-    return supabase.channel('org-$organizationId-announcements')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'announcements',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'organization_id',
-            value: organizationId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] New announcement: ${payload.newRecord}');
-            onAnnouncement(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock announcements for org: $organizationId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToPayslips(
       String employeeId, Function(Map<String, dynamic>) onPayslip) {
-    print('NotificationService: Subscribing to payslips for employee: $employeeId');
-    
-    return supabase.channel('employee-$employeeId-payslips')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'india_payroll_records',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'employee_id',
-            value: employeeId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] New payslip: ${payload.newRecord}');
-            onPayslip(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock payslips for employee: $employeeId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToExpenseUpdates(
       String employeeId, Function(Map<String, dynamic>) onExpenseUpdate) {
-    print('NotificationService: Subscribing to expense updates for employee: $employeeId');
-    
-    return supabase.channel('employee-$employeeId-expenses')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'expenses',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'employee_id',
-            value: employeeId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] Expense update: ${payload.newRecord}');
-            onExpenseUpdate(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock expenses for employee: $employeeId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToCharges(
       String employeeId, Function(Map<String, dynamic>) onCharge) {
-    print('NotificationService: Subscribing to charges for employee: $employeeId');
-    
-    // Attempt to filter by employee_id if possible, or filter in callback
-    // Note: If 'employee_charges' RLS allows it, checking by employee_id works
-    return supabase.channel('employee-$employeeId-charges')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'employee_charges',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'employee_id',
-            value: employeeId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] New charge: ${payload.newRecord}');
-            onCharge(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock charges for employee: $employeeId');
+    return RealtimeChannel();
   }
 
   RealtimeChannel subscribeToPolicies(
       String organizationId, Function(Map<String, dynamic>) onPolicy) {
-    print('NotificationService: Subscribing to policies for org: $organizationId');
-    
-    return supabase.channel('org-$organizationId-policies')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'policies',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'organization_id',
-            value: organizationId,
-          ),
-          callback: (payload) {
-            print('NotificationService: [REALTIME] New policy: ${payload.newRecord}');
-            onPolicy(payload.newRecord);
-          },
-        )
-        .subscribe();
+    print('NotificationService: Subscribing mock policies for org: $organizationId');
+    return RealtimeChannel();
   }
 }
