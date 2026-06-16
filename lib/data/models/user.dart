@@ -27,9 +27,14 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    // If the JSON object contains a nested 'user' map (like in some legacy auth formats), unwrap it
+    final Map<String, dynamic> data = json['user'] != null && json['user'] is Map<String, dynamic>
+        ? Map<String, dynamic>.from(json['user'])
+        : json;
+
     // Handle role parsing - check for admin roles (admin, super_admin, hr_manager, manager)
     // Based on schema: 'super_admin', 'admin', 'hr_manager', 'manager', 'employee'
-    final roleString = (json['role'] as String?)?.toLowerCase().trim() ?? 'employee';
+    final roleString = (data['role'] as String?)?.toLowerCase().trim() ?? 'employee';
     final isAdmin = roleString == 'admin' || 
                     roleString == 'super_admin' || 
                     roleString == 'hr_manager' || 
@@ -38,19 +43,19 @@ class User {
     return User(
       // Use user_id (foreign key to auth.users) as the main identifier
       // This matches the RLS policies which check user_id = auth.uid()
-      id: json['user_id'] as String? ?? json['id'] as String? ?? '',
-      fullName: json['full_name'] as String? ?? '',
-      email: json['email'] as String?, // Can be in DB now
-      employeeId: json['employee_id'] as String?,
+      id: data['user_id'] as String? ?? data['id'] as String? ?? '',
+      fullName: data['full_name'] as String? ?? '',
+      email: data['email'] as String?, // Can be in DB now
+      employeeId: data['employee_id'] as String?,
       role: isAdmin ? UserRole.admin : UserRole.employee,
-      isActive: json['is_active'] as bool? ?? true,
-      lastLogin: json['last_login_at'] != null 
-          ? DateTime.parse(json['last_login_at'] as String)
+      isActive: data['is_active'] as bool? ?? true,
+      lastLogin: data['last_login_at'] != null 
+          ? DateTime.parse(data['last_login_at'] as String)
           : null,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+      createdAt: data['created_at'] != null
+          ? DateTime.parse(data['created_at'] as String)
           : DateTime.now(),
-      avatarUrl: json['avatar_url'] as String?,
+      avatarUrl: data['avatar_url'] as String?,
     );
   }
   

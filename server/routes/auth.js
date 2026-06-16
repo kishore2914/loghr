@@ -101,8 +101,8 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// POST /login
-router.post('/login', async (req, res) => {
+// POST /login & POST /signin
+const loginHandler = async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -172,7 +172,10 @@ router.post('/login', async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
   }
-});
+};
+
+router.post('/login', loginHandler);
+router.post('/signin', loginHandler);
 
 // GET /me (load user from token session)
 router.get('/me', authenticateToken, async (req, res) => {
