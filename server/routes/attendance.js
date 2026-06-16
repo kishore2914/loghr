@@ -6,18 +6,83 @@ const router = express.Router();
 
 // Helper: Get employee info (employee_id, organization_id) from user_id
 async function getEmployeeInfo(userId) {
-  const result = await query(
-    'SELECT employee_id, organization_id FROM user_profiles WHERE user_id = $1',
+  // 1. Get user profile
+  let profileRes = await query(
+    'SELECT employee_id, organization_id, email, full_name FROM user_profiles WHERE user_id = $1',
     [userId]
   );
-  if (result.rows.length > 0 && result.rows[0].employee_id) {
-    return {
-      employee_id: result.rows[0].employee_id,
-      organization_id: result.rows[0].organization_id,
-    };
+  
+  if (profileRes.rows.length === 0) {
+    // No profile, fetch user email
+    const userRes = await query('SELECT email FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      throw new Error('User not found');
+    }
+    const email = userRes.rows[0].email;
+    
+    // Auto-create profile
+    const orgResult = await query('SELECT id FROM organizations LIMIT 1');
+    const orgId = orgResult.rows.length > 0 ? orgResult.rows[0].id : null;
+    if (!orgId) {
+      throw new Error('No organization exists in the database. Please seed organizations first.');
+    }
+    
+    const newProfile = await query(
+      `INSERT INTO user_profiles (user_id, organization_id, full_name, email, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, orgId, email.split('@')[0], email, 'employee', true]
+    );
+    profileRes = newProfile;
   }
-  // Fallback: use user_id itself if no employee linked
-  return { employee_id: userId, organization_id: null };
+  
+  let profile = profileRes.rows[0];
+  let employeeId = profile.employee_id;
+  let organizationId = profile.organization_id;
+  
+  // 2. If organization_id is null, resolve it
+  if (!organizationId) {
+    const orgResult = await query('SELECT id FROM organizations LIMIT 1');
+    organizationId = orgResult.rows.length > 0 ? orgResult.rows[0].id : null;
+    if (!organizationId) {
+      throw new Error('No organization exists in the database. Please seed organizations first.');
+    }
+    // Update profile
+    await query('UPDATE user_profiles SET organization_id = $1 WHERE user_id = $2', [organizationId, userId]);
+  }
+  
+  // 3. If employee_id is null, resolve it
+  if (!employeeId) {
+    const email = profile.email;
+    // Check if an employee record already exists with this email
+    const empRes = await query(
+      'SELECT id FROM employees WHERE company_email = $1 OR personal_email = $1 LIMIT 1',
+      [email]
+    );
+    
+    if (empRes.rows.length > 0) {
+      employeeId = empRes.rows[0].id;
+      // Update employee's user_id link
+      await query('UPDATE employees SET user_id = $1 WHERE id = $2', [userId, employeeId]);
+    } else {
+      // Create a new employee record
+      const empCode = 'EMP-' + Math.floor(1000 + Math.random() * 9000);
+      const name = profile.full_name || email.split('@')[0];
+      const firstName = name.split(' ')[0] || name;
+      const lastName = name.split(' ').slice(1).join(' ') || '';
+      
+      const newEmp = await query(
+        `INSERT INTO employees (organization_id, employee_code, first_name, last_name, company_email, is_active, user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [organizationId, empCode, firstName, lastName, email, true, userId]
+      );
+      employeeId = newEmp.rows[0].id;
+    }
+    
+    // Update profile with employee_id
+    await query('UPDATE user_profiles SET employee_id = $1 WHERE user_id = $2', [employeeId, userId]);
+  }
+  
+  return { employee_id: employeeId, organization_id: organizationId };
 }
 
 // GET /api/attendance/incomplete

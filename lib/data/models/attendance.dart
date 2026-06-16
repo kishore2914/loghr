@@ -72,7 +72,7 @@ class Attendance {
           ? (json['check_out_longitude'] as num).toDouble()
           : null,
       checkOutLocation: json['check_out_location'] as String?,
-      earlyCheckoutReason: json['early_checkout_reason'] as String?,
+      earlyCheckoutReason: (json['early_checkout_reason'] ?? json['notes']) as String?,
     );
   }
   
