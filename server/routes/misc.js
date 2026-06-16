@@ -416,7 +416,7 @@ router.get('/payroll/records/:id', authenticateToken, async (req, res) => {
 router.post('/loyalty/award', authenticateToken, async (req, res) => {
   const { employeeId, points, type, description, referenceId } = req.body;
   try {
-    const orgId = await getOrgId(req.user.userId);
+    const { organization_id: orgId } = await getEmployeeId(req.user.userId);
     if (!orgId) return res.status(400).json({ error: 'No organization linked' });
 
     await query(
