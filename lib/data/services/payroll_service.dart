@@ -1,27 +1,7 @@
-import 'package:loghr_mobile/config/supabase_config.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 import 'package:intl/intl.dart';
 
 class PayrollService {
-  // Helper method to get employee_id from user_id
-  Future<String?> _getEmployeeId(String userId) async {
-    try {
-      // Get employee_id from user_profiles table
-      final profileData = await supabase
-          .from('user_profiles')
-          .select('employee_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      
-      if (profileData != null && profileData['employee_id'] != null) {
-        return profileData['employee_id'] as String;
-      }
-      return null;
-    } catch (e) {
-      print('Error getting employee_id: $e');
-      return null;
-    }
-  }
-
   // Get employee's payroll history
   Future<List<Map<String, dynamic>>> getEmployeePayrollHistory({
     String? userId,
@@ -31,45 +11,24 @@ class PayrollService {
     try {
       if (userId == null) return [];
 
-      // 1. Get employee_id (Required for this table)
-      final employeeId = await _getEmployeeId(userId);
-      if (employeeId == null) {
-        print('No employee_id found for user: $userId');
-        return [];
-      }
+      final response = await api.get('/misc/payroll/records');
+      if (response == null) return [];
 
-      // 2. Build Query on india_payroll_records
-      // Start with the base filter builder
-      var query = supabase
-          .from('india_payroll_records')
-          .select('*')
-          .eq('employee_id', employeeId);
+      List<dynamic> list = response as List;
 
-      // Apply optional filters
+      // Filter locally
       if (month != null) {
-        query = query.eq('pay_period_month', month);
+        list = list.where((r) => r['pay_period_month'] == month).toList();
       }
       if (year != null) {
-        query = query.eq('pay_period_year', year);
+        list = list.where((r) => r['pay_period_year'] == year).toList();
       }
 
-      // Apply ordering and limit at the end to get the final result
-      final List<dynamic> data = await query
-          .order('pay_period_year', ascending: false)
-          .order('pay_period_month', ascending: false)
-          .limit(100);
-
-      print('Fetched ${data.length} records for employee: $employeeId');
-
-      if (data.isEmpty) return [];
-
-      // 3. Transform data
-      return data.map((record) {
+      return list.map((record) {
         final gross = _toDouble(record['gross_salary']) ?? 0.0;
         final deductions = _toDouble(record['total_deductions']) ?? 0.0;
         final net = _toDouble(record['net_salary']) ?? 0.0;
         
-        // Construct readable month
         final pMonth = record['pay_period_month'] as int?;
         final pYear = record['pay_period_year'] as int?;
         String monthYear = 'Unknown';
@@ -79,7 +38,6 @@ class PayrollService {
         }
 
         final workingDays = record['working_days'] as int? ?? 0;
-        // status might be lower case in DB
         final status = (record['status'] as String? ?? 'Pending');
 
         return {
@@ -95,7 +53,6 @@ class PayrollService {
           'raw_data': record,
         };
       }).toList();
-
     } catch (e) {
       print('Error fetching payroll history: $e');
       return [];
@@ -105,14 +62,10 @@ class PayrollService {
   // Get detailed payslip data by ID
   Future<Map<String, dynamic>?> getPayslipDetails(String payslipId) async {
     try {
-      final data = await supabase
-          .from('india_payroll_records')
-          .select('*')
-          .eq('id', payslipId)
-          .maybeSingle();
+      final response = await api.get('/misc/payroll/records/$payslipId');
+      if (response == null) return null;
 
-      if (data == null) return null;
-
+      final data = response as Map<String, dynamic>;
       final basic = _toDouble(data['basic_salary']) ?? 0.0;
       final da = _toDouble(data['dearness_allowance']) ?? _toDouble(data['da']) ?? 0.0;
       final hra = _toDouble(data['house_rent_allowance']) ?? _toDouble(data['hra']) ?? 0.0;
@@ -132,24 +85,17 @@ class PayrollService {
       final advance = _toDouble(data['advance_salary']) ?? 0.0;
       final loan = _toDouble(data['loan_repayment']) ?? _toDouble(data['loan_emi']) ?? 0.0;
       final deductions = _toDouble(data['total_deductions']) ?? 0.0;
-      // Use exact net_salary from database - DO NOT RECALCULATE
       final net = _toDouble(data['net_salary']) ?? 0.0;
       
-      // Check for absence deduction in database - try multiple field names
       final absenceDeduction = _toDouble(data['absence_deduction']) ?? 
                                _toDouble(data['lop_deduction']) ?? 
-                               _toDouble(data['loss_of_pay']) ??
-                               _toDouble(data['lop_amount']) ??
-                               _toDouble(data['absence_amount']) ?? 0.0;
+                               _toDouble(data['loss_of_pay']) ?? 0.0;
       
-      // Get company name from payroll record if available
-      final companyName = data['company_name'] as String? ?? 
-                         data['organization_name'] as String?;
+      final companyName = data['company_name'] as String? ?? 'LogHR';
 
       final pMonth = data['pay_period_month'] as int?;
       final pYear = data['pay_period_year'] as int?;
 
-      // Construct dates for PDF if needed (First and Last day of month)
       String? startDate;
       String? endDate;
       if (pMonth != null && pYear != null) {
@@ -179,20 +125,20 @@ class PayrollService {
         'advance_salary': advance,
         'loan_repayment': loan,
         'deductions': deductions,
-        'net_salary': net, // Use exact value from database - DO NOT RECALCULATE
-        'absence_deduction': absenceDeduction, // Use value from database if available
+        'net_salary': net,
+        'absence_deduction': absenceDeduction,
         'status': data['status'] as String? ?? 'pending',
         'currency': data['currency'] as String? ?? 'INR',
-        'pay_period_start': startDate, // Computed
-        'pay_period_end': endDate,     // Computed
+        'pay_period_start': startDate,
+        'pay_period_end': endDate,
         'working_days': data['working_days'] as int? ?? 0,
         'total_working_days': data['total_working_days'] as int? ?? data['working_days'] as int? ?? 30,
         'pay_period_month': pMonth,
         'pay_period_year': pYear,
         'user_id': data['user_id'],
         'employee_id': data['employee_id'],
-        'payment_date': data['payment_date'], // Use payment_date from database if available
-        'company_name': companyName, // Include company name from payroll record
+        'payment_date': data['payment_date'],
+        'company_name': companyName,
       };
     } catch (e) {
       print('Error fetching payslip details: $e');
@@ -215,8 +161,3 @@ class PayrollService {
     return NumberFormat('#,##0').format(amount);
   }
 }
-
-
-
-
-

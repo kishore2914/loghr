@@ -10,7 +10,6 @@ import 'package:loghr_mobile/data/models/performance_review.dart';
 import 'package:loghr_mobile/data/models/task.dart';
 import 'package:loghr_mobile/ui/widgets/performance_widgets.dart';
 import 'package:loghr_mobile/ui/widgets/goal_details_modal.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
 
 class PerformanceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToDashboard;
@@ -49,25 +48,8 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
-    // Get the current authenticated user directly from Supabase Auth
-    // This ensures we're using the correct user ID that matches the email
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    
-    // First try to get from Supabase Auth directly (most reliable)
-    String? userId;
-    try {
-      final authUser = supabase.auth.currentUser;
-      userId = authUser?.id;
-      print('PerformanceScreen: Using user_id from Supabase Auth: $userId');
-      if (authUser?.email != null) {
-        print('PerformanceScreen: User email: ${authUser?.email}');
-      }
-    } catch (e) {
-      print('PerformanceScreen: Error getting user from Supabase Auth: $e');
-      // Fallback to AuthProvider
-      userId = authProvider.user?.id;
-      print('PerformanceScreen: Using user_id from AuthProvider: $userId');
-    }
+    final userId = authProvider.user?.id;
 
     if (userId == null) {
       print('PerformanceScreen: No user ID available');
@@ -100,19 +82,6 @@ class _PerformanceScreenState extends State<PerformanceScreen> {
       if (goals.isEmpty) {
         print('PerformanceScreen: ⚠️ WARNING - No goals loaded!');
         print('PerformanceScreen: User ID: $userId');
-        // Try to debug why goals aren't loading
-        try {
-          final authUser = supabase.auth.currentUser;
-          print('PerformanceScreen: Auth user ID: ${authUser?.id}');
-          print('PerformanceScreen: Auth user email: ${authUser?.email}');
-          
-          // Try to fetch goals directly to see what happens
-          print('PerformanceScreen: Attempting direct goals fetch for debugging...');
-          final directGoals = await _performanceService.getGoals(userId);
-          print('PerformanceScreen: Direct fetch returned ${directGoals.length} goals');
-        } catch (e) {
-          print('PerformanceScreen: Error during debug fetch: $e');
-        }
       } else {
         print('PerformanceScreen: ✅ Goals loaded successfully:');
         for (var goal in goals) {

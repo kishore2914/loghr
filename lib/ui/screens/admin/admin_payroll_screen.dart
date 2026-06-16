@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:loghr_mobile/data/services/admin_service.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
 
 class AdminPayrollScreen extends StatefulWidget {
   const AdminPayrollScreen({super.key});

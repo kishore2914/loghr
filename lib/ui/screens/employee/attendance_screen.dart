@@ -9,7 +9,7 @@ import 'package:loghr_mobile/logic/leave_provider.dart';
 import 'package:loghr_mobile/data/models/attendance.dart';
 import 'package:loghr_mobile/data/models/leave.dart';
 import 'package:loghr_mobile/utils/helpers.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 
 class AttendanceScreen extends StatefulWidget {
   final VoidCallback? onNavigateToDashboard;
@@ -1756,34 +1756,10 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
         return;
       }
 
-      // Get user profile to fetch organization_id
-      final userProfile = await supabase
-          .from('user_profiles')
-          .select('organization_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-      final organizationId = userProfile?['organization_id'] as String?;
-      if (organizationId == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Organization not found'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
+      // Fetch holiday calendar documents from custom API
+      final holidayDocs = await api.get('/misc/holiday-calendar');
+      
       final currentYear = DateTime.now().year;
-
-      // Fetch holiday calendar documents from Supabase
-      final holidayDocs = await supabase
-          .from('holiday_calendar_documents')
-          .select()
-          .eq('organization_id', organizationId)
-          .order('year', ascending: false);
-
       final documents = (holidayDocs as List).map((doc) => {
         'id': doc['id'] as String?,
         'year': doc['year'] as int? ?? currentYear,
@@ -1831,98 +1807,7 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
 
   Future<void> _showHolidayImageDialog(BuildContext context, String filePath, String fileType, int year) async {
     try {
-      // Get public URL from Supabase storage
-      String imageUrl = '';
-      String? signedUrl;
-      
-      // If file_path is already a full URL, use it directly
-      if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-        imageUrl = filePath;
-      } else {
-        // Extract bucket and file path from the stored path
-        // Path format: organization_id/year/filename.jpg
-        final parts = filePath.split('/');
-        
-        // Try different bucket names - common ones for holiday calendars
-        final possibleBuckets = ['holiday-calendars', 'holidays', 'documents', 'holiday_calendars'];
-        
-        bool urlFound = false;
-        
-        for (final bucket in possibleBuckets) {
-          try {
-            // Try with full path
-            final url1 = supabase.storage.from(bucket).getPublicUrl(filePath);
-            
-            // Also try with path without first part (if first part is organization_id)
-            String url2 = '';
-            if (parts.length > 1) {
-              final filePathInBucket = parts.sublist(1).join('/');
-              url2 = supabase.storage.from(bucket).getPublicUrl(filePathInBucket);
-            }
-            
-            // Use the first valid URL
-            if (url1.isNotEmpty && url1.startsWith('http')) {
-              imageUrl = url1;
-              urlFound = true;
-              print('Found URL with bucket $bucket and full path: $imageUrl');
-              break;
-            } else if (url2.isNotEmpty && url2.startsWith('http')) {
-              imageUrl = url2;
-              urlFound = true;
-              print('Found URL with bucket $bucket and partial path: $imageUrl');
-              break;
-            }
-          } catch (e) {
-            print('Error trying bucket $bucket: $e');
-            continue;
-          }
-        }
-        
-        // If still not found, try using first part as bucket name
-        if (!urlFound && parts.length > 1) {
-          try {
-            final bucketName = parts[0];
-            final filePathInBucket = parts.sublist(1).join('/');
-            imageUrl = supabase.storage.from(bucketName).getPublicUrl(filePathInBucket);
-            print('Trying first part as bucket: $bucketName, path: $filePathInBucket, URL: $imageUrl');
-          } catch (e) {
-            print('Error with first part as bucket: $e');
-            // Last fallback: use full path with most common bucket
-            imageUrl = supabase.storage.from('holiday-calendars').getPublicUrl(filePath);
-          }
-        } else if (!urlFound) {
-          // Single part path - use with default bucket
-          imageUrl = supabase.storage.from('holiday-calendars').getPublicUrl(filePath);
-        }
-        
-        // Try to get signed URL as fallback (for private buckets)
-        try {
-          if (parts.length > 1) {
-            final possibleBucketsForSigned = ['holiday-calendars', 'holidays', 'documents'];
-            for (final bucket in possibleBucketsForSigned) {
-              try {
-                final filePathInBucket = parts.sublist(1).join('/');
-                signedUrl = await supabase.storage.from(bucket).createSignedUrl(filePathInBucket, 3600);
-                print('Created signed URL for bucket $bucket: $signedUrl');
-                break;
-              } catch (e) {
-                continue;
-              }
-            }
-          }
-        } catch (e) {
-          print('Error creating signed URL: $e');
-        }
-      }
-      
-      print('Holiday image URL: $imageUrl');
-      print('File path: $filePath');
-      print('File type: $fileType');
-      if (signedUrl != null) {
-        print('Signed URL: $signedUrl');
-      }
-
-      if (!mounted) return;
+      String imageUrl = filePath;
       
       if (imageUrl.isEmpty) {
         if (!mounted) return;
@@ -1943,14 +1828,14 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
           backgroundColor: Colors.black87,
           body: SafeArea(
             child: Column(
-       children: [
+              children: [
                 // Header
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-         Text(
+                      Text(
                         'Holiday Calendar $year',
                         style: const TextStyle(
                           color: Colors.white,
@@ -1984,8 +1869,6 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                               const SizedBox(height: 16),
                               TextButton(
                                 onPressed: () {
-                                  // Open PDF in external app
-                                  // You can use url_launcher here
                                   Navigator.pop(context); // Close dialog first
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -1998,10 +1881,45 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
                             ],
                           ),
                         )
-                      : _HolidayImageViewer(
-                          imageUrl: imageUrl,
-                          signedUrl: signedUrl,
-                          filePath: filePath,
+                      : InteractiveViewer(
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.error_outline, size: 64, color: Colors.red.shade700),
+                                    const SizedBox(height: 16),
+                                    const Text('Failed to load image', style: TextStyle(color: Colors.black)),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      filePath,
+                                      style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                         ),
                   ),
                 ),
@@ -2011,143 +1929,16 @@ class AttendanceScreenState extends State<AttendanceScreen> with SingleTickerPro
         ),
       );
     } catch (e) {
-      // Don't show snackbar here - the error will be displayed in the image error builder
-      // Using context after async operations can cause issues if widget is disposed
       print('Error showing holiday image dialog: $e');
       if (mounted) {
-        // Only show snackbar if widget is still mounted and we have a valid context
-        try {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to load image: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        } catch (contextError) {
-          // Context is invalid, just log the error
-          print('Cannot show snackbar - context invalid: $contextError');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
-  }
-}
-
-// Widget to handle image loading with fallback to signed URL
-class _HolidayImageViewer extends StatefulWidget {
-  final String imageUrl;
-  final String? signedUrl;
-  final String filePath;
-
-  const _HolidayImageViewer({
-    required this.imageUrl,
-    this.signedUrl,
-    required this.filePath,
-  });
-
-  @override
-  State<_HolidayImageViewer> createState() => _HolidayImageViewerState();
-}
-
-class _HolidayImageViewerState extends State<_HolidayImageViewer> {
-  String? _currentUrl;
-  bool _hasError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentUrl = widget.imageUrl;
-  }
-
-  void _trySignedUrl() {
-    if (widget.signedUrl != null && _currentUrl != widget.signedUrl) {
-      setState(() {
-        _currentUrl = widget.signedUrl;
-        _hasError = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return InteractiveViewer(
-      child: Image.network(
-        _currentUrl!,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                      loadingProgress.expectedTotalBytes!
-                  : null,
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          // Try signed URL if available
-          if (!_hasError && widget.signedUrl != null && _currentUrl == widget.imageUrl) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _trySignedUrl();
-            });
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          // Mark that we've already handled the error, but do it after this frame
-          if (!_hasError) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _hasError = true;
-                });
-              }
-            });
-          }
-
-          return Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: Colors.red.shade700),
-                const SizedBox(height: 16),
-                const Text('Failed to load image'),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    widget.filePath,
-                    style: const TextStyle(fontSize: 10),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'URL: ${_currentUrl?.substring(0, _currentUrl!.length > 50 ? 50 : _currentUrl!.length)}...',
-                  style: const TextStyle(fontSize: 10),
-                  textAlign: TextAlign.center,
-                ),
-                if (widget.signedUrl != null && _currentUrl == widget.imageUrl) ...[
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _trySignedUrl,
-                    child: const Text('Try Alternative URL'),
-                  ),
-                ],
-              ],
-            ),
-          );
-        },
-      ),
-     );
   }
 }
 

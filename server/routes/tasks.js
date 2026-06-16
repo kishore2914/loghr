@@ -98,4 +98,56 @@ router.post('/update-status', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/tasks/all
+router.get('/all', authenticateToken, async (req, res) => {
+  try {
+    const orgId = await getOrgId(req.user.userId);
+    if (!orgId) return res.status(400).json({ error: 'No organization linked' });
+
+    const result = await query(
+      `SELECT t.*, up.full_name as assignee_name
+       FROM tasks t
+       LEFT JOIN employees e ON t.assigned_to = e.id
+       LEFT JOIN user_profiles up ON e.id = up.employee_id
+       WHERE t.organization_id = $1
+       ORDER BY t.created_at DESC`,
+      [orgId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all tasks:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/tasks/stats
+router.get('/stats', authenticateToken, async (req, res) => {
+  try {
+    const orgId = await getOrgId(req.user.userId);
+    if (!orgId) return res.status(400).json({ error: 'No organization linked' });
+
+    const result = await query(
+      `SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress
+       FROM tasks WHERE organization_id = $1`,
+      [orgId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching task stats:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Helper to get organization ID
+async function getOrgId(userId) {
+  const result = await query('SELECT organization_id FROM user_profiles WHERE user_id = $1', [userId]);
+  return result.rows[0]?.organization_id;
+}
+
 module.exports = router;

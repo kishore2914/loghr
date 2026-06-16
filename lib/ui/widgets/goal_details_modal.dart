@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:loghr_mobile/data/models/goal.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
+import 'package:loghr_mobile/data/services/performance_service.dart';
 import 'package:intl/intl.dart';
 
 class GoalDetailsModal extends StatefulWidget {
@@ -16,6 +16,7 @@ class GoalDetailsModal extends StatefulWidget {
 }
 
 class _GoalDetailsModalState extends State<GoalDetailsModal> {
+  final PerformanceService _performanceService = PerformanceService();
   List<Map<String, dynamic>> _comments = [];
   bool _isLoadingComments = true;
   final TextEditingController _commentController = TextEditingController();
@@ -33,74 +34,14 @@ class _GoalDetailsModalState extends State<GoalDetailsModal> {
 
   Future<void> _loadGoalDetails() async {
     try {
-      // Fetch full goal details
-      final goalData = await supabase
-          .from('goals')
-          .select('*')
-          .eq('id', widget.goal.id)
-          .maybeSingle();
-
-      if (goalData != null) {
+      final goalData = await _performanceService.getGoalDetails(widget.goal.id);
+      if (goalData != null && mounted) {
         setState(() {
           _goalDetails = goalData;
+          _assignedToName = goalData['assigned_to_name'] as String?;
+          _departmentName = goalData['department_name'] as String?;
+          _createdByName = goalData['created_by_name'] as String?;
         });
-        
-        // Fetch employee name (assigned to)
-        final employeeId = goalData['employee_id'] as String?;
-        if (employeeId != null) {
-          try {
-            final employee = await supabase
-                .from('employees')
-                .select('full_name')
-                .eq('id', employeeId)
-                .maybeSingle();
-            if (employee != null && mounted) {
-              setState(() {
-                _assignedToName = employee['full_name'] as String?;
-              });
-            }
-          } catch (e) {
-            print('GoalDetailsModal: Error fetching employee: $e');
-          }
-        }
-        
-        // Fetch department name
-        final departmentId = goalData['department_id'] as String?;
-        if (departmentId != null) {
-          try {
-            final department = await supabase
-                .from('departments')
-                .select('name')
-                .eq('id', departmentId)
-                .maybeSingle();
-            if (department != null && mounted) {
-              setState(() {
-                _departmentName = department['name'] as String?;
-              });
-            }
-          } catch (e) {
-            print('GoalDetailsModal: Error fetching department: $e');
-          }
-        }
-        
-        // Fetch created by name
-        final createdBy = goalData['created_by'] as String?;
-        if (createdBy != null) {
-          try {
-            final creator = await supabase
-                .from('user_profiles')
-                .select('full_name')
-                .eq('user_id', createdBy)
-                .maybeSingle();
-            if (creator != null && mounted) {
-              setState(() {
-                _createdByName = creator['full_name'] as String?;
-              });
-            }
-          } catch (e) {
-            print('GoalDetailsModal: Error fetching creator: $e');
-          }
-        }
       }
     } catch (e) {
       print('GoalDetailsModal: Error loading goal details: $e');
@@ -116,70 +57,31 @@ class _GoalDetailsModalState extends State<GoalDetailsModal> {
   Future<void> _loadComments() async {
     try {
       setState(() => _isLoadingComments = true);
-      
-      // Try to fetch comments from goal_comments or goal_discussions table
-      List<dynamic> comments = [];
-      try {
-        comments = await supabase
-            .from('goal_comments')
-            .select('*, user_profiles(full_name, email)')
-            .eq('goal_id', widget.goal.id)
-            .order('created_at', ascending: false);
-      } catch (e) {
-        print('GoalDetailsModal: goal_comments table not found, trying goal_discussions: $e');
-        try {
-          comments = await supabase
-              .from('goal_discussions')
-              .select('*, user_profiles(full_name, email)')
-              .eq('goal_id', widget.goal.id)
-              .order('created_at', ascending: false);
-        } catch (e2) {
-          print('GoalDetailsModal: goal_discussions table not found: $e2');
-        }
+      final comments = await _performanceService.getGoalComments(widget.goal.id);
+      if (mounted) {
+        setState(() {
+          _comments = comments;
+          _isLoadingComments = false;
+        });
       }
-
-      setState(() {
-        _comments = comments.cast<Map<String, dynamic>>();
-        _isLoadingComments = false;
-      });
     } catch (e) {
       print('GoalDetailsModal: Error loading comments: $e');
-      setState(() => _isLoadingComments = false);
+      if (mounted) {
+        setState(() => _isLoadingComments = false);
+      }
     }
   }
 
   Future<void> _addComment() async {
-    if (_commentController.text.trim().isEmpty) return;
+    final commentText = _commentController.text.trim();
+    if (commentText.isEmpty) return;
 
     try {
-      final authUser = supabase.auth.currentUser;
-      if (authUser == null) return;
-
-      // Try to insert comment
-      try {
-        await supabase.from('goal_comments').insert({
-          'goal_id': widget.goal.id,
-          'user_id': authUser.id,
-          'comment': _commentController.text.trim(),
-          'created_at': DateTime.now().toIso8601String(),
-        });
-      } catch (e) {
-        print('GoalDetailsModal: Error inserting comment: $e');
-        // Try alternative table name
-        try {
-          await supabase.from('goal_discussions').insert({
-            'goal_id': widget.goal.id,
-            'user_id': authUser.id,
-            'comment': _commentController.text.trim(),
-            'created_at': DateTime.now().toIso8601String(),
-          });
-        } catch (e2) {
-          print('GoalDetailsModal: Error inserting to goal_discussions: $e2');
-        }
+      final success = await _performanceService.addGoalComment(widget.goal.id, commentText);
+      if (success) {
+        _commentController.clear();
+        await _loadComments();
       }
-
-      _commentController.clear();
-      _loadComments();
     } catch (e) {
       print('GoalDetailsModal: Error adding comment: $e');
     }

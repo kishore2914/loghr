@@ -128,4 +128,185 @@ router.post('/cancel', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/leaves/pending
+router.get('/pending', authenticateToken, async (req, res) => {
+  try {
+    const orgId = await getOrgId(req.user.userId);
+    if (!orgId) return res.status(400).json({ error: 'No organization linked' });
+
+    const result = await query(
+      `SELECT la.*, lt.name as leave_type_name, lt.code as leave_type_code, up.full_name as employee_name
+       FROM leave_applications la
+       JOIN leave_types lt ON la.leave_type_id = lt.id
+       JOIN employees e ON la.employee_id = e.id
+       JOIN user_profiles up ON e.id = up.employee_id
+       WHERE la.organization_id = $1 AND la.status = 'pending'
+       ORDER BY la.created_at DESC`,
+      [orgId]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching pending leaves:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Helper to get organization ID
+async function getOrgId(userId) {
+  const result = await query('SELECT organization_id FROM user_profiles WHERE user_id = $1', [userId]);
+  return result.rows[0]?.organization_id;
+}
+
+// POST /api/leaves/:id/approve
+router.post('/:id/approve', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const orgId = await getOrgId(req.user.userId);
+    if (!orgId) return res.status(400).json({ error: 'No organization linked' });
+
+    // Retrieve leave application
+    const leaveRes = await query(
+      `SELECT la.*, lt.code as leave_code, lt.name as leave_name
+       FROM leave_applications la
+       JOIN leave_types lt ON la.leave_type_id = lt.id
+       WHERE la.id = $1 AND la.organization_id = $2`,
+      [id, orgId]
+    );
+
+    if (leaveRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    const leave = leaveRes.rows[0];
+    if (leave.status !== 'pending') {
+      return res.status(400).json({ error: `Leave application is already ${leave.status}` });
+    }
+
+    // Update status to approved
+    await query(
+      `UPDATE leave_applications 
+       SET status = 'approved', approved_by = (SELECT employee_id FROM user_profiles WHERE user_id = $1), approved_at = NOW() 
+       WHERE id = $2`,
+      [req.user.userId, id]
+    );
+
+    // Sync to attendance calendar
+    const startDate = new Date(leave.start_date);
+    const endDate = new Date(leave.end_date);
+    const leaveCode = (leave.leave_code || '').toLowerCase();
+    const leaveName = (leave.leave_name || '').toLowerCase();
+
+    let calendarStatus = 'leave'; // Default
+    if (leaveCode.includes('remote') || leaveCode.includes('wfh') || leaveName.includes('wfh') || leaveName.includes('remote')) {
+      calendarStatus = 'work_from_home';
+    }
+
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+
+      // Insert or Update attendance
+      const existing = await query(
+        'SELECT id, check_in_time FROM attendance WHERE employee_id = $1 AND date = $2',
+        [leave.employee_id, dateStr]
+      );
+
+      if (existing.rows.length > 0) {
+        if (!existing.rows[0].check_in_time) {
+          await query(
+            'UPDATE attendance SET status = $1, updated_at = NOW() WHERE id = $2',
+            [calendarStatus, existing.rows[0].id]
+          );
+        }
+      } else {
+        await query(
+          `INSERT INTO attendance (organization_id, employee_id, date, status, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+          [orgId, leave.employee_id, dateStr, calendarStatus]
+        );
+      }
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Award loyalty points
+    try {
+      const cardRes = await query('SELECT id FROM loyalty_cards WHERE employee_id = $1', [leave.employee_id]);
+      if (cardRes.rows.length > 0) {
+        await query(
+          `INSERT INTO loyalty_point_transactions (organization_id, employee_id, points, transaction_type, description, reference_id) 
+           VALUES ($1, $2, 50, 'earned', $3, $4)`,
+          [orgId, leave.employee_id, `Award for approved leave: ${leave.leave_name || 'Leave'}`, id]
+        );
+        await query(
+          `UPDATE loyalty_cards SET points_earned = points_earned + 50 WHERE employee_id = $1`,
+          [leave.employee_id]
+        );
+      }
+    } catch (e) {
+      console.error('Error awarding points for leave record:', e);
+    }
+
+    res.json({ success: true, message: 'Leave approved successfully' });
+  } catch (error) {
+    console.error('Error approving leave:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/leaves/:id/reject
+router.post('/:id/reject', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { rejectionReason } = req.body;
+
+  try {
+    const orgId = await getOrgId(req.user.userId);
+    if (!orgId) return res.status(400).json({ error: 'No organization linked' });
+
+    // Retrieve leave application
+    const leaveRes = await query(
+      'SELECT employee_id, start_date, end_date, status FROM leave_applications WHERE id = $1 AND organization_id = $2',
+      [id, orgId]
+    );
+
+    if (leaveRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Leave application not found' });
+    }
+
+    const leave = leaveRes.rows[0];
+    if (leave.status !== 'pending') {
+      return res.status(400).json({ error: `Leave application is already ${leave.status}` });
+    }
+
+    // Update status to rejected
+    await query(
+      `UPDATE leave_applications 
+       SET status = 'rejected', rejection_reason = $1, updated_at = NOW() 
+       WHERE id = $2`,
+      [rejectionReason || null, id]
+    );
+
+    // Remove calendar entries (only if no check_in_time)
+    const startDate = new Date(leave.start_date);
+    const endDate = new Date(leave.end_date);
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      await query(
+        `DELETE FROM attendance 
+         WHERE employee_id = $1 AND date = $2 AND check_in_time IS NULL`,
+        [leave.employee_id, dateStr]
+      );
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    res.json({ success: true, message: 'Leave rejected successfully' });
+  } catch (error) {
+    console.error('Error rejecting leave:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

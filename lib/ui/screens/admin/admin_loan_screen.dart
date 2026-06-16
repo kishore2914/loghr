@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:loghr_mobile/logic/auth_provider.dart';
 import 'package:loghr_mobile/logic/loan_provider.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 import 'package:loghr_mobile/data/models/loan.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
 
 class AdminLoanScreen extends StatefulWidget {
   const AdminLoanScreen({super.key});
@@ -36,14 +36,8 @@ class _AdminLoanScreenState extends State<AdminLoanScreen> {
     final user = authProvider.user;
     
     if (user != null) {
-      // Get organization_id
       try {
-        final profile = await supabase
-            .from('user_profiles')
-            .select('organization_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-        
+        final profile = await api.get('/profile');
         final organizationId = profile?['organization_id'] as String?;
         if (organizationId != null) {
           await loanProvider.loadPendingLoans(organizationId);

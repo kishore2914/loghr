@@ -12,6 +12,7 @@ const tasksRouter = require('./routes/tasks');
 const announcementsRouter = require('./routes/announcements');
 const miscRouter = require('./routes/misc');
 const dbRouter = require('./routes/db');
+const adminRouter = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/announcements', announcementsRouter);
 app.use('/api/misc', miscRouter);
 app.use('/api/db', dbRouter);
+app.use('/api/admin', adminRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

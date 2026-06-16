@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:loghr_mobile/data/models/attendance.dart';
 import 'package:loghr_mobile/data/repositories/attendance_repository.dart';
+import 'package:loghr_mobile/config/api_client.dart';
 import 'package:loghr_mobile/data/services/notification_service.dart';
-import 'package:loghr_mobile/config/supabase_config.dart';
 
 class AttendanceProvider extends ChangeNotifier {
   final AttendanceRepository _repository;
@@ -269,14 +269,10 @@ class AttendanceProvider extends ChangeNotifier {
         payload: "auto_checkout",
       );
 
-      // Notify admins in the same organization via Supabase notifications table
+      // Notify admins in the same organization via notifications
       try {
         // Look up employee name
-        final profile = await supabase
-            .from('user_profiles')
-            .select('full_name, employee_id')
-            .eq('user_id', userId)
-            .maybeSingle();
+        final profile = await api.get('/profile');
         final employeeName = profile?['full_name'] as String? ?? 'An employee';
         final employeeId = profile?['employee_id'] as String? ?? userId;
 
